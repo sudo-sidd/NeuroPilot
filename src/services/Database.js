@@ -1,5 +1,6 @@
 import SQLite from 'react-native-sqlite-storage';
 import { migrations, latestVersion } from './migrations';
+import { scheduleTaskReminder, cancelTaskReminder } from './Notifications';
 
 const db = SQLite.openDatabase({ name: 'NeuroPilot.db', location: 'default' });
 
@@ -30,6 +31,10 @@ const applyMigrations = () => {
 
 export const initDatabase = () => {
   applyMigrations();
+  // After migrations, attempt generation of upcoming recurring instances (non-blocking)
+  setTimeout(() => {
+    try { generateRecurringInstances && generateRecurringInstances({ daysAhead: 7 }); } catch(e) { /* silent */ }
+  }, 500);
 };
 
 // Existing Users helpers
@@ -210,7 +215,7 @@ export const deleteActionClass = (id) => {
 };
 
 // Phase 3 Task helpers
-export const createTask = ({ name, description = '', dueDate = null, repetitionType = null, repetitionDays = null }) => {
+export const createTask = ({ name, description = '', dueDate = null, repetitionType = null, repetitionDays = null, reminderTime = null }) => {
   return new Promise((resolve, reject) => {
     if (!name || !name.trim()) return reject(new Error('Task name required'));
     const daysStr = Array.isArray(repetitionDays) ? repetitionDays.join(',') : repetitionDays;
@@ -218,14 +223,24 @@ export const createTask = ({ name, description = '', dueDate = null, repetitionT
       tx.executeSql(
         'INSERT INTO Task (name, description, due_date, repetition_type, repetition_days) VALUES (?, ?, ?, ?, ?)',
         [name.trim(), description, dueDate, repetitionType, daysStr],
-        (_, result) => resolve(result.insertId),
+        async (_, result) => {
+          const id = result.insertId;
+          if (dueDate && reminderTime) {
+            try {
+              const fireDate = new Date(dueDate + 'T' + reminderTime + ':00');
+              const notifId = await scheduleTaskReminder({ taskId: id, title: 'Task Due', body: name, fireDate });
+              db.transaction(tt => tt.executeSql('UPDATE Task SET reminder_notification_id = ? WHERE task_id = ?', [notifId, id]));
+            } catch {}
+          }
+          resolve(id);
+        },
         (_, error) => reject(error)
       );
     });
   });
 };
 
-export const updateTask = (id, { name, description, dueDate, completed, repetitionType, repetitionDays }) => {
+export const updateTask = (id, { name, description, dueDate, completed, repetitionType, repetitionDays, reminderTime }) => {
   return new Promise((resolve, reject) => {
     if (!id) return reject(new Error('Task ID required'));
     const fields = [];
@@ -236,16 +251,54 @@ export const updateTask = (id, { name, description, dueDate, completed, repetiti
     if (completed !== undefined) { fields.push('completed = ?'); values.push(completed ? 1 : 0); }
     if (repetitionType !== undefined) { fields.push('repetition_type = ?'); values.push(repetitionType); }
     if (repetitionDays !== undefined) { fields.push('repetition_days = ?'); values.push(Array.isArray(repetitionDays) ? repetitionDays.join(',') : repetitionDays); }
-    if (!fields.length) return resolve(0);
+    if (!fields.length && reminderTime === undefined) return resolve(0);
     fields.push('updated_at = datetime("now")');
+    const sql = `UPDATE Task SET ${fields.join(', ')} WHERE task_id = ?`;
     values.push(id);
     db.transaction(tx => {
-      tx.executeSql(
-        `UPDATE Task SET ${fields.join(', ')} WHERE task_id = ?`,
-        values,
-        (_, result) => resolve(result.rowsAffected),
-        (_, error) => reject(error)
-      );
+      tx.executeSql(sql, values, async () => {
+        if (reminderTime !== undefined) {
+          // cancel existing
+          db.readTransaction(rtx => {
+            rtx.executeSql('SELECT due_date, name, reminder_notification_id FROM Task WHERE task_id = ? LIMIT 1', [id], async (_, { rows }) => {
+              if (rows.length) {
+                const row = rows.item(0);
+                if (row.reminder_notification_id) {
+                  try { await cancelTaskReminder(row.reminder_notification_id); } catch {}
+                }
+                if (row.due_date && reminderTime) {
+                  try {
+                    const fireDate = new Date(row.due_date + 'T' + reminderTime + ':00');
+                    const newId = await scheduleTaskReminder({ taskId: id, title: 'Task Due', body: row.name, fireDate });
+                    db.transaction(ut => ut.executeSql('UPDATE Task SET reminder_notification_id = ? WHERE task_id = ?', [newId, id]));
+                  } catch {}
+                } else {
+                  db.transaction(ct => ct.executeSql('UPDATE Task SET reminder_notification_id = NULL WHERE task_id = ?', [id]));
+                }
+              }
+            });
+          });
+        }
+        resolve(1);
+      }, (_, error) => reject(error));
+    });
+  });
+};
+
+export const deleteTask = (id) => {
+  return new Promise((resolve, reject) => {
+    if (!id) return reject(new Error('Task ID required'));
+    db.transaction(tx => {
+      tx.executeSql('SELECT reminder_notification_id FROM Task WHERE task_id = ? LIMIT 1', [id], async (_, { rows }) => {
+        const notifId = rows.length ? rows.item(0).reminder_notification_id : null;
+        if (notifId) { try { await cancelTaskReminder(notifId); } catch {} }
+        tx.executeSql(
+          'DELETE FROM Task WHERE task_id = ?',
+          [id],
+          (_, result) => resolve(result.rowsAffected),
+          (_, error) => reject(error)
+        );
+      });
     });
   });
 };
@@ -263,6 +316,7 @@ export const getTasks = ({ includeCompleted = true } = {}) => {
   });
 };
 
+// NOTE: repetition_type / repetition_days are deprecated (Phase 8). Will be removed after template model stabilizes.
 export const generateRecurringTasks = () => {
   return new Promise((resolve, reject) => {
     const today = new Date();
@@ -420,6 +474,159 @@ export const getWeeklyReport = (startDate) => {
           );
         },
         (_, err) => reject(err)
+      );
+    });
+  });
+};
+
+// Phase 8 Recurring Template Helpers
+export const createRecurringTemplate = ({ name, description = '', patternType, patternDays = '', everyOtherSeed = null }) => {
+  return new Promise((resolve, reject) => {
+    if (!name || !name.trim()) return reject(new Error('Name required'));
+    if (!patternType) return reject(new Error('patternType required'));
+    if (!['daily', 'every_other_day', 'weekdays'].includes(patternType)) return reject(new Error('Invalid patternType'));
+    if (patternType === 'weekdays') {
+      const days = (patternDays || '').split(',').map(d => d.trim()).filter(Boolean);
+      const valid = days.every(d => /^([0-6])$/.test(d));
+      if (!days.length || !valid) return reject(new Error('Invalid patternDays'));
+      patternDays = days.join(',');
+    } else {
+      patternDays = null;
+    }
+    if (patternType === 'every_other_day' && !everyOtherSeed) {
+      everyOtherSeed = new Date().toISOString().slice(0,10);
+    }
+    db.transaction(tx => {
+      tx.executeSql(
+        'INSERT INTO RecurringTemplate (name, description, pattern_type, pattern_days, every_other_seed) VALUES (?, ?, ?, ?, ?)',
+        [name.trim(), description, patternType, patternDays, everyOtherSeed],
+        (_, result) => resolve(result.insertId),
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+export const updateRecurringTemplate = (id, { name, description, patternType, patternDays, everyOtherSeed, active }) => {
+  return new Promise((resolve, reject) => {
+    if (!id) return reject(new Error('ID required'));
+    const fields = [];
+    const values = [];
+    if (name !== undefined) { fields.push('name = ?'); values.push(name.trim()); }
+    if (description !== undefined) { fields.push('description = ?'); values.push(description); }
+    if (patternType !== undefined) {
+      if (!['daily', 'every_other_day', 'weekdays'].includes(patternType)) return reject(new Error('Invalid patternType'));
+      fields.push('pattern_type = ?'); values.push(patternType);
+    }
+    if (patternDays !== undefined) {
+      if (patternDays) {
+        const days = patternDays.split(',').map(d => d.trim()).filter(Boolean);
+        const valid = days.every(d => /^([0-6])$/.test(d));
+        if (!valid) return reject(new Error('Invalid patternDays'));
+        fields.push('pattern_days = ?'); values.push(days.join(','));
+      } else {
+        fields.push('pattern_days = NULL');
+      }
+    }
+    if (everyOtherSeed !== undefined) { fields.push('every_other_seed = ?'); values.push(everyOtherSeed); }
+    if (active !== undefined) { fields.push('active = ?'); values.push(active ? 1 : 0); }
+    if (!fields.length) return resolve(0);
+    fields.push('updated_at = datetime("now")');
+    values.push(id);
+    db.transaction(tx => {
+      tx.executeSql(
+        `UPDATE RecurringTemplate SET ${fields.join(', ')} WHERE template_id = ?`,
+        values,
+        (_, result) => resolve(result.rowsAffected),
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+export const listRecurringTemplates = () => {
+  return new Promise((resolve, reject) => {
+    db.readTransaction(tx => {
+      tx.executeSql('SELECT * FROM RecurringTemplate WHERE active = 1 ORDER BY created_at DESC', [], (_, { rows }) => {
+        const arr = []; for (let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr);
+      }, (_, e) => reject(e));
+    });
+  });
+};
+
+export const deactivateRecurringTemplate = (id) => updateRecurringTemplate(id, { active: 0 });
+
+export const generateRecurringInstances = ({ daysAhead = 7 } = {}) => {
+  return new Promise((resolve, reject) => {
+    const today = new Date();
+    const startISO = today.toISOString().slice(0,10);
+    const end = new Date(today); end.setDate(end.getDate() + daysAhead);
+    const endISO = end.toISOString().slice(0,10);
+
+    db.transaction(tx => {
+      tx.executeSql('SELECT * FROM RecurringTemplate WHERE active = 1', [], (_, { rows }) => {
+        let generated = 0;
+        const templates = []; for (let i=0;i<rows.length;i++) templates.push(rows.item(i));
+
+        const ensureForDate = (tpl, dateStr) => {
+          tx.executeSql(
+            'SELECT 1 FROM Task WHERE template_id = ? AND due_date = ? LIMIT 1',
+            [tpl.template_id, dateStr],
+            (_, existing) => {
+              if (existing.rows.length) return; // already generated
+              tx.executeSql(
+                'INSERT INTO Task (name, description, due_date, completed, template_id, is_generated, source_generation_date) VALUES (?, ?, ?, 0, ?, 1, ?)',
+                [tpl.name, tpl.description || '', dateStr, tpl.template_id, dateStr],
+                () => { generated += 1; },
+                () => {}
+              );
+            }
+          );
+        };
+
+        templates.forEach(tpl => {
+          if (tpl.pattern_type === 'daily') {
+            // generate each day
+            let d = new Date(startISO + 'T00:00:00Z');
+            const endD = new Date(endISO + 'T00:00:00Z');
+            while (d <= endD) { ensureForDate(tpl, d.toISOString().slice(0,10)); d.setUTCDate(d.getUTCDate()+1); }
+          } else if (tpl.pattern_type === 'weekdays') {
+            const days = (tpl.pattern_days || '').split(',').map(x => x.trim()).filter(Boolean);
+            let d = new Date(startISO + 'T00:00:00Z');
+            const endD = new Date(endISO + 'T00:00:00Z');
+            while (d <= endD) {
+              const wd = d.getUTCDay();
+              if (days.includes(String(wd))) ensureForDate(tpl, d.toISOString().slice(0,10));
+              d.setUTCDate(d.getUTCDate()+1);
+            }
+          } else if (tpl.pattern_type === 'every_other_day') {
+            const seed = tpl.every_other_seed || startISO;
+            const seedDate = new Date(seed + 'T00:00:00Z');
+            let d = new Date(startISO + 'T00:00:00Z');
+            const endD = new Date(endISO + 'T00:00:00Z');
+            while (d <= endD) {
+              const diffDays = Math.floor((d - seedDate) / 86400000);
+              if (diffDays >= 0 && diffDays % 2 === 0) ensureForDate(tpl, d.toISOString().slice(0,10));
+              d.setUTCDate(d.getUTCDate()+1);
+            }
+          }
+        });
+        resolve(generated);
+      }, (_, error) => reject(error));
+    });
+  });
+};
+
+export const createActivityManual = ({ actionClassId = 1, startISO, endISO, description = '' }) => {
+  return new Promise((resolve, reject) => {
+    if (!startISO) return reject(new Error('startISO required'));
+    const durationMs = endISO ? (new Date(endISO) - new Date(startISO)) : null;
+    db.transaction(tx => {
+      tx.executeSql(
+        'INSERT INTO Activity (action_class_id, start_time, end_time, description, duration_ms) VALUES (?, ?, ?, ?, ?)',
+        [actionClassId, startISO, endISO || null, description, durationMs],
+        (_, result) => resolve(result.insertId),
+        (_, error) => reject(error)
       );
     });
   });

@@ -19,6 +19,10 @@ The format is based on Keep a Changelog and this project adheres (pre-1.0) to se
 - Navigation update: added dedicated `TaskScreen` & placeholder `ActivityScreen`, routes exposed in navigator.
 - Phase 6: migration 5 (DailyForm table), DailyForm CRUD helpers (upsertDailyForm/getDailyForm/getDailyFormsInRange), `DailyFormScreen` initial UI & navigation route.
 - Phase 7 (initial): weekly reporting backend helper `getWeeklyReport` and `ReportsScreen` UI (activity durations, task completion, mood average) + navigation entry + HomeScreen shortcut.
+- Phase 8: migration 6 (RecurringTemplate table + Task template linkage columns), recurring template helpers (create/update/list/deactivate), generation API `generateRecurringInstances`, deprecation note for legacy repetition fields, auto-invocation of generation on init.
+- Phase 9: migration 7 (Task.reminder_notification_id), task create/update now schedules/cancels reminders (basic timestamp trigger), added missing `deleteTask` helper (with reminder cancellation) to satisfy existing tests/UI.
+- Phase 9: Added recurrence generation tests (`Recurring.test.js`).
+- Phase 9: Added weekly report aggregation tests (`Report.test.js`) and test helper `createActivityManual`.
 
 ### Planned
 
@@ -27,4 +31,5 @@ The format is based on Keep a Changelog and this project adheres (pre-1.0) to se
 - Tests for recurring task generation logic and DailyForm CRUD.
 - Activity detail analytics implementation.
 - Reporting UI enhancements: charts, trend comparisons, per-task breakdown, export.
+- Phase 8 follow-up: migration to drop deprecated repetition columns (future version 7).
 

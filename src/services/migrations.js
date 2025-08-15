@@ -41,6 +41,43 @@ export const migrations = [
     statements: [
       `CREATE TABLE IF NOT EXISTS DailyForm (\n        form_id INTEGER PRIMARY KEY AUTOINCREMENT,\n        form_date TEXT NOT NULL UNIQUE,\n        mood INTEGER,\n        thoughts TEXT,\n        highlights TEXT,\n        gratitude TEXT,\n        poop_time TEXT,\n        poop_quality INTEGER,\n        additional_fields TEXT,\n        updated_at TEXT NOT NULL DEFAULT (datetime('now'))\n      )`
     ]
+  },
+  {
+    version: 6,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS RecurringTemplate (
+        template_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        pattern_type TEXT NOT NULL,
+        pattern_days TEXT,
+        every_other_seed TEXT,
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `ALTER TABLE Task ADD COLUMN template_id INTEGER REFERENCES RecurringTemplate(template_id)` ,
+      `ALTER TABLE Task ADD COLUMN is_generated INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE Task ADD COLUMN source_generation_date TEXT`,
+      // Backfill: create one template per existing recurring task (simple safe approach)
+      `INSERT INTO RecurringTemplate (name, description, pattern_type, pattern_days, every_other_seed)
+       SELECT name, description, repetition_type, repetition_days, date('now') FROM Task WHERE repetition_type IS NOT NULL`,
+      // Link tasks to templates (rowid correlation: rely on ordering via a join on same fields; may produce multiple link matches if duplicates exist)
+      `UPDATE Task SET template_id = (
+         SELECT template_id FROM RecurringTemplate rt
+         WHERE rt.name = Task.name AND rt.pattern_type = Task.repetition_type AND IFNULL(rt.pattern_days,'') = IFNULL(Task.repetition_days,'')
+         ORDER BY rt.template_id LIMIT 1
+       ), is_generated = 0 WHERE repetition_type IS NOT NULL`,
+      `CREATE INDEX IF NOT EXISTS idx_task_template ON Task(template_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_task_template_due ON Task(template_id, due_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_recurring_template_active ON RecurringTemplate(active, pattern_type)`
+    ]
+  },
+  {
+    version: 7,
+    statements: [
+      `ALTER TABLE Task ADD COLUMN reminder_notification_id TEXT`
+    ]
   }
 ];
 
