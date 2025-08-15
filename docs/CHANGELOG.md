@@ -26,6 +26,7 @@ The format is based on Keep a Changelog and this project adheres (pre-1.0) to se
 - Phase 10: UI refresh introducing design system (`theme.js`), reusable components (Card, SectionHeader, PrimaryButton, Input, Chip) and redesigned Home, Tasks, Settings, DailyForm, Reports screens.
 - Phase 10: Added bottom tab navigation (Tasks, Action, Journal) replacing prior stack-only entry for core flows.
 - Phase 10: Added dependency `@react-navigation/bottom-tabs` for bottom navigation implementation.
+- Phase 10: Adjusted HomeScreen for safe-area top padding and removed Tasks section (now solely in Tasks tab).
 
 ### Planned
 

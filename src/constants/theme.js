@@ -31,3 +31,13 @@ export const typography = {
 export const shadows = {
   card: { shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2 }
 };
+
+// Diagnostic log (dev only) to confirm module evaluation
+if (__DEV__) {
+  // eslint-disable-next-line no-console
+  console.log('[theme] loaded. palette keys:', Object.keys(palette));
+}
+
+// Provide default export for any default import usage
+const theme = { palette, spacing, radii, typography, shadows };
+export default theme;
