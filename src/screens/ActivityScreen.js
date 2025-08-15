@@ -34,8 +34,21 @@ const ActivityScreen = ({ navigation }) => {
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const hours = Array.from({length:24},(_,i)=>i);
   const minutesArr = Array.from({length:60},(_,i)=>i);
+  const hourScrollRef = useRef(null);
+  const minuteScrollRef = useRef(null);
   const parseHHMM = (v)=>{ const [h,m]=v.split(':').map(n=>parseInt(n,10)); return {h: isNaN(h)?0:h, m:isNaN(m)?0:m}; };
   const formatHM = (h,m)=> h.toString().padStart(2,'0')+':'+m.toString().padStart(2,'0');
+
+  useEffect(()=>{
+    if(timePickerVisible){
+      // Wait a tick for modal layout
+      setTimeout(()=>{
+        const sel = parseHHMM(pickerMode==='start'?formStart:formEnd);
+        if(hourScrollRef.current){ hourScrollRef.current.scrollTo({ y: sel.h * 40, animated:false }); }
+        if(minuteScrollRef.current){ minuteScrollRef.current.scrollTo({ y: sel.m * 40, animated:false }); }
+      }, 30);
+    }
+  }, [timePickerVisible, pickerMode]);
 
   const refresh = async () => {
     try {
@@ -314,18 +327,30 @@ const ActivityScreen = ({ navigation }) => {
       </Modal>
       {/* Time picker overlay */}
       <Modal visible={timePickerVisible} transparent animationType='fade' onRequestClose={()=> setTimePickerVisible(false)}>
+        {/* Auto scroll to selected time on open */}
+        {useEffect(() => {
+          if (timePickerVisible) {
+            const { h, m } = parseHHMM(pickerMode === 'start' ? formStart : formEnd);
+            if (hourScrollRef.current && !isNaN(h)) {
+              hourScrollRef.current.scrollTo({ x: 0, y: h * 40, animated: true });
+            }
+            if (minuteScrollRef.current && !isNaN(m)) {
+              minuteScrollRef.current.scrollTo({ x: 0, y: m * 40, animated: true });
+            }
+          }
+        }, [timePickerVisible, formStart, formEnd])}
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.55)', justifyContent:'center', alignItems:'center' }}>
           <View style={{ backgroundColor: palette.surface, padding: spacing(4), borderRadius:16, width:'80%' }}>
             <Text style={{ fontSize:16, fontWeight:'600', color: palette.text, marginBottom: spacing(2) }}>Select {pickerMode==='start'?'Start':'End'} Time</Text>
             <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
-              <ScrollView style={{ height:200, width:'45%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
+              <ScrollView ref={hourScrollRef} style={{ height:200, width:'45%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
                 {hours.map(h=> (
                   <TouchableOpacity key={'h'+h} onPress={()=>{ const {m}=parseHHMM(pickerMode==='start'?formStart:formEnd); if(pickerMode==='start'){ setFormStart(formatHM(h,m)); if(!editing){ setFormEnd(formatHM(h,m)); } } else { setFormEnd(formatHM(h,m)); } }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
                     <Text style={{ color: (parseHHMM(pickerMode==='start'?formStart:formEnd).h===h)? palette.primary : palette.text }}>{h.toString().padStart(2,'0')}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              <ScrollView style={{ height:200, width:'45%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
+              <ScrollView ref={minuteScrollRef} style={{ height:200, width:'45%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
                 {minutesArr.map(m=> (
                   <TouchableOpacity key={'m'+m} onPress={()=>{ const {h}=parseHHMM(pickerMode==='start'?formStart:formEnd); if(pickerMode==='start'){ setFormStart(formatHM(h,m)); if(!editing){ setFormEnd(formatHM(h,m)); } } else { setFormEnd(formatHM(h,m)); } }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
                     <Text style={{ color: (parseHHMM(pickerMode==='start'?formStart:formEnd).m===m)? palette.primary : palette.text }}>{m.toString().padStart(2,'0')}</Text>
