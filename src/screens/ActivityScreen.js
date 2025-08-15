@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Animated, Easing, DeviceEventEmitter } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import OptionsDrawer from '../components/ui/OptionsDrawer';
 import { useTheme, useThemeMode } from '../constants/theme';
@@ -68,6 +68,9 @@ const ActivityScreen = ({ navigation }) => {
   const elapsedMs = current ? (now - new Date(current.start_time).getTime()) : 0;
   const minutes = Math.floor(elapsedMs / 60000).toString().padStart(2,'0');
   const seconds = Math.floor((elapsedMs % 60000)/1000).toString().padStart(2,'0');
+
+  useEffect(() => { const unsub = navigation.addListener('focus', refresh); return unsub; }, [navigation]);
+  useEffect(() => { const sub = DeviceEventEmitter.addListener('activityUpdated', refresh); return () => sub.remove(); }, []);
 
   return (
     <SafeAreaView style={{ flex:1, backgroundColor: palette.background }} edges={['top']}> 

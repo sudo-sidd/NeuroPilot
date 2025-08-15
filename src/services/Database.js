@@ -1,6 +1,7 @@
 import SQLite from 'react-native-sqlite-storage';
 import { migrations, latestVersion } from './migrations';
 import { scheduleTaskReminder, cancelTaskReminder } from './Notifications';
+import { DeviceEventEmitter } from 'react-native';
 
 const db = SQLite.openDatabase({ name: 'NeuroPilot.db', location: 'default' });
 
@@ -92,7 +93,6 @@ export const startActivity = (actionClassId, description = '') => {
   return new Promise((resolve, reject) => {
     const now = new Date().toISOString();
     db.transaction(tx => {
-      // Auto-stop any existing running activity
       tx.executeSql(
         'UPDATE Activity SET end_time = ?, duration_ms = (strftime("%s", ?) - strftime("%s", start_time)) * 1000 WHERE end_time IS NULL',
         [now, now]
@@ -100,7 +100,7 @@ export const startActivity = (actionClassId, description = '') => {
       tx.executeSql(
         'INSERT INTO Activity (action_class_id, start_time, description) VALUES (?, ?, ?)',
         [actionClassId, now, description],
-        (_, result) => resolve(result.insertId),
+        (_, result) => { DeviceEventEmitter.emit('activityUpdated'); resolve(result.insertId); },
         (_, error) => reject(error)
       );
     });
@@ -114,7 +114,7 @@ export const stopCurrentActivity = () => {
       tx.executeSql(
         'UPDATE Activity SET end_time = ?, duration_ms = (strftime("%s", ?) - strftime("%s", start_time)) * 1000 WHERE end_time IS NULL',
         [now, now],
-        (_, result) => resolve(result.rowsAffected),
+        () => { DeviceEventEmitter.emit('activityUpdated'); resolve(true); },
         (_, error) => reject(error)
       );
     });

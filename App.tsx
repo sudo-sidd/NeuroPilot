@@ -11,6 +11,7 @@ import Input from './src/components/ui/Input';
 import PrimaryButton from './src/components/ui/PrimaryButton';
 import { getActionClasses, startActivity, createTask, getCurrentActivity, stopCurrentActivity } from './src/services/Database';
 import Chip from './src/components/ui/Chip';
+import { DeviceEventEmitter } from 'react-native';
 
 const RootInner = () => {
   const navRef = useNavigationContainerRef();
@@ -42,7 +43,7 @@ const RootInner = () => {
         // Stop running activity
         stopCurrentActivity().then(() => {
           setCurrentActivity(null);
-          // trigger screen refresh
+          DeviceEventEmitter.emit('activityUpdated');
           navRef.navigate('ActivityTab', { ts: Date.now() });
         }).catch(()=>{});
       } else {
@@ -59,7 +60,7 @@ const RootInner = () => {
   const submitActivity = async () => {
     if (!selectedClass) return; await startActivity(selectedClass.action_class_id, activityDesc.trim());
     setActivityModal(false); setActivityDesc(''); setSelectedClass(null);
-    getCurrentActivity().then(a => setCurrentActivity(a)).catch(()=>{});
+    getCurrentActivity().then(a => { setCurrentActivity(a); DeviceEventEmitter.emit('activityUpdated'); }).catch(()=>{});
     navRef.navigate('ActivityTab', { ts: Date.now() });
   };
   const submitTask = async () => {
@@ -72,7 +73,7 @@ const RootInner = () => {
   }, []);
   const chooseReport = (start) => { setReportModal(false); navigateSafe('ReportsTab', { start }); };
 
-  const fabHidden = current.includes('Settings');
+  const fabHidden = current.includes('Settings') || current.includes('Journal') || current.includes('Reports');
 
   return (
     <NavigationContainer ref={navRef} onStateChange={() => setCurrent(navRef.getCurrentRoute()?.name || '')}>
