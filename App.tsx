@@ -12,6 +12,7 @@ import PrimaryButton from './src/components/ui/PrimaryButton';
 import { getActionClasses, startActivity, createTask, getCurrentActivity, stopCurrentActivity, listTaskClasses } from './src/services/Database';
 import Chip from './src/components/ui/Chip';
 import { DeviceEventEmitter } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const RootInner = () => {
   const navRef = useNavigationContainerRef();
@@ -65,6 +66,36 @@ const RootInner = () => {
   useEffect(() => { if (activityModal) { getActionClasses().then(setClasses).catch(()=>{}); } }, [activityModal]);
   useEffect(() => { if (taskModal) { listTaskClasses().then(setTaskClasses).catch(()=>{}); } }, [taskModal]);
 
+  // Auto-scroll time picker wheels when modal opens
+  useEffect(() => {
+    if (taskTimePickerVisible) {
+      const { h, m } = parseHM(taskTimePickerMode === 'start' ? taskStartTime : taskDueTime);
+      // Delay to ensure ScrollViews are laid out
+      const t = setTimeout(() => {
+        if (taskHourScrollRef.current) taskHourScrollRef.current.scrollTo({ y: h * 40, animated: true });
+        if (taskMinuteScrollRef.current) taskMinuteScrollRef.current.scrollTo({ y: m * 40, animated: true });
+      }, 0);
+      return () => clearTimeout(t);
+    }
+  }, [taskTimePickerVisible, taskTimePickerMode, taskStartTime, taskDueTime]);
+
+  // Auto-scroll date picker wheels when modal opens
+  useEffect(() => {
+    if (taskDatePickerVisible) {
+      const target = taskDatePickerMode === 'start' ? taskStartDate : taskDueDate;
+      const { y, m, d } = parseDate(target);
+      const t = setTimeout(() => {
+        if (yearScrollRef.current) {
+          const yi = years.indexOf(y);
+            if (yi >= 0) yearScrollRef.current.scrollTo({ y: yi * 40, animated: true });
+        }
+        if (monthScrollRef.current) monthScrollRef.current.scrollTo({ y: (m - 1) * 40, animated: true });
+        if (dayScrollRef.current) dayScrollRef.current.scrollTo({ y: (d - 1) * 40, animated: true });
+      }, 0);
+      return () => clearTimeout(t);
+    }
+  }, [taskDatePickerVisible, taskDatePickerMode, taskStartDate, taskDueDate, years]);
+
   const navigateSafe = (name, params) => { try { navRef.navigate(name, params || undefined); } catch {} };
 
   const onFabPress = () => {
@@ -94,7 +125,7 @@ const RootInner = () => {
     navRef.navigate('ActivityTab', { ts: Date.now() });
   };
   const submitTask = async () => {
-    if (!taskName.trim()) return; await createTask({ name: taskName.trim(), priority: taskPriority, taskClassId, dueDate: taskDueDate || null, dueTime: taskDueTime || null, startDate: taskStartDate || null, startTime: taskStartTime || null }); setTaskName(''); setTaskDueDate(''); setTaskDueTime(''); setTaskStartDate(''); setTaskStartTime(''); setTaskPriority(3); setTaskClassId(null); setTaskModal(false); navigateSafe('TasksTab');
+    if (!taskName.trim()) return; await createTask({ name: taskName.trim(), priority: taskPriority, taskClassId, dueDate: taskDueDate || null, dueTime: taskDueTime || null, startDate: taskStartDate || null, startTime: taskStartTime || null }); setTaskName(''); setTaskDueDate(''); setTaskDueTime(''); setTaskStartDate(''); setTaskStartTime(''); setTaskPriority(3); setTaskClassId(null); setTaskModal(false); DeviceEventEmitter.emit('tasksUpdated'); navigateSafe('TasksTab');
   };
 
   const mondays = React.useMemo(() => {
@@ -213,7 +244,7 @@ const RootInner = () => {
         </View>
       </Modal>
       <Modal visible={taskTimePickerVisible} transparent animationType='fade' onRequestClose={()=> setTaskTimePickerVisible(false)}>
-        {React.useEffect(()=>{ if(taskTimePickerVisible){ const {h,m}=parseHM(taskTimePickerMode==='start'?taskStartTime:taskDueTime); if(taskHourScrollRef.current) taskHourScrollRef.current.scrollTo({y:h*40, animated:true}); if(taskMinuteScrollRef.current) taskMinuteScrollRef.current.scrollTo({y:m*40, animated:true}); } }, [taskTimePickerVisible, taskTimePickerMode])}
+        {/* removed inline useEffect; handled by top-level effect */}
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.55)', justifyContent:'center', alignItems:'center' }}>
           <View style={{ backgroundColor: palette.surface, padding: spacing(4), borderRadius:16, width:'80%' }}>
             <Text style={{ fontSize:16, fontWeight:'600', color: palette.text, marginBottom: spacing(2) }}>Select {taskTimePickerMode==='start'?'Start':'Due'} Time</Text>
@@ -245,12 +276,7 @@ const RootInner = () => {
         </View>
       </Modal>
       <Modal visible={taskDatePickerVisible} transparent animationType='fade' onRequestClose={()=> setTaskDatePickerVisible(false)}>
-        {useEffect(()=>{ if(taskDatePickerVisible){ const target = taskDatePickerMode==='start'? taskStartDate : taskDueDate; const {y,m,d}=parseDate(target); // scroll after small delay to ensure refs measured
-    const t = setTimeout(()=>{ if(yearScrollRef.current){ const yi = years.indexOf(y); if(yi>=0) yearScrollRef.current.scrollTo({y: yi*40, animated:true}); }
-      if(monthScrollRef.current) monthScrollRef.current.scrollTo({y: (m-1)*40, animated:true});
-      if(dayScrollRef.current) dayScrollRef.current.scrollTo({y: (d-1)*40, animated:true}); }, 50);
-    return ()=> clearTimeout(t);
-  } }, [taskDatePickerVisible, taskDatePickerMode, taskStartDate, taskDueDate])}
+        {/* removed inline useEffect; handled by top-level effect */}
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.55)', justifyContent:'center', alignItems:'center' }}>
           <View style={{ backgroundColor: palette.surface, padding: spacing(4), borderRadius:16, width:'90%' }}>
             <Text style={{ fontSize:16, fontWeight:'600', color: palette.text, marginBottom: spacing(2) }}>Select {taskDatePickerMode==='start'?'Start':'Due'} Date</Text>
@@ -299,9 +325,11 @@ const Root = () => {
     requestNotificationPermission();
   }, []);
   return (
-    <ThemeProvider>
-      <RootInner />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex:1 }}>
+      <ThemeProvider>
+        <RootInner />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 };
 

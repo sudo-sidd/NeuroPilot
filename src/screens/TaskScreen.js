@@ -7,6 +7,8 @@ import SectionHeader from '../components/ui/SectionHeader';
 import PrimaryButton from '../components/ui/PrimaryButton';
 import Input from '../components/ui/Input';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
+import { DeviceEventEmitter } from 'react-native';
 
 const TaskScreen = ({ navigation }) => {
   const { palette, typography, spacing } = useTheme();
@@ -36,6 +38,12 @@ const TaskScreen = ({ navigation }) => {
   };
 
   useEffect(() => { refresh(); }, []);
+  // Refresh when returning to this tab or when tasks updated elsewhere
+  useEffect(() => {
+    const focusUnsub = navigation.addListener('focus', refresh);
+    const evt = DeviceEventEmitter.addListener('tasksUpdated', refresh);
+    return () => { focusUnsub(); evt.remove(); };
+  }, [navigation]);
 
   const add = async () => {
     if (!name.trim()) return; await createTask({ name: name.trim(), priority, taskClassId: selectedClass }); setName(''); setPriority(3); refresh();
@@ -115,20 +123,27 @@ const TaskScreen = ({ navigation }) => {
 
     const rowBg = translateX.interpolate({
       inputRange: [-140, -90, 0, 90, 140],
-      outputRange: ['#FFC94D', '#FFC94D', 'transparent', '#6BCB77', '#6BCB77'],
+      outputRange: ['rgba(255,201,77,1)', 'rgba(255,201,77,1)', 'rgba(0,0,0,0)', 'rgba(107,203,119,1)', 'rgba(107,203,119,1)'],
       extrapolate: 'clamp'
     });
 
-    const icon = translateX.interpolate({
-      inputRange: [-140, -90, -30, 30, 90, 140],
-      outputRange: ['⏰','⏰','', '', '✔️','✔️'],
+    // Separate opacity channels for each icon instead of invalid string interpolation
+    const snoozeOpacity = translateX.interpolate({
+      inputRange: [-140, -90, -30],
+      outputRange: [1, 1, 0],
+      extrapolate: 'clamp'
+    });
+    const completeOpacity = translateX.interpolate({
+      inputRange: [30, 90, 140],
+      outputRange: [0, 1, 1],
       extrapolate: 'clamp'
     });
 
     return (
       <View style={{ overflow:'hidden' }}>
         <Animated.View style={{ position:'absolute', left:0, right:0, top:0, bottom:0, backgroundColor: rowBg, flexDirection:'row', alignItems:'center', justifyContent:'center' }}>
-          <Animated.Text style={{ fontSize:18 }}>{icon}</Animated.Text>
+          <Animated.Text style={{ fontSize:18, marginRight:8, opacity: snoozeOpacity }}>⏰</Animated.Text>
+          <Animated.Text style={{ fontSize:18, opacity: completeOpacity }}>✔️</Animated.Text>
         </Animated.View>
         <PanGestureHandler onGestureEvent={onGestureEvent} onHandlerStateChange={handleStateChange} activeOffsetX={[-15,15]}>
           <Animated.View style={{ transform:[{ translateX }], paddingVertical: spacing(2), flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
