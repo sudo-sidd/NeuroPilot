@@ -4,40 +4,44 @@ import { getPreference } from '../services/Database';
 // Design token definitions (Phase 1 Theme System)
 const lightPalette = {
   mode: 'light',
-  primary: '#FFB347',
-  primaryDark: '#F59A1F',
-  secondary: '#6BCB77',
-  background: '#FDF8F4',
-  backgroundAlt: '#F9F3EF',
+  primary: '#FFD166', // warm gold
+  primaryDark: '#E6B851',
+  secondary: '#6BCB77', // fresh green
+  tertiary: '#6BCB77', // alias (not distinct in light)
+  background: '#FAF9F6',
+  backgroundAlt: '#FAF9F6',
   surface: '#FFFFFF',
   surfaceAlt: '#F9F3EF',
   border: '#E6DDD6',
-  text: '#1A1A1A',
-  textLight: '#665F5A',
+  text: '#1C1C1C',
+  textLight: '#5E5E5E',
   success: '#6BCB77',
   info: '#4D96FF',
-  warning: '#FFC94D',
+  warning: '#FFD166',
   danger: '#FF5F56',
-  focus: '#4D96FF'
+  focus: '#4D96FF',
+  gradient: ['#FAF9F6','#F9D1E4','#D3E4FD']
 };
 
 const darkPalette = {
   mode: 'dark',
-  primary: '#FF7B54',
-  primaryDark: '#FF6435',
-  secondary: '#5BE7A9',
-  background: '#0F0F10',
-  backgroundAlt: '#1B1C1E',
-  surface: '#1B1C1E',
-  surfaceAlt: '#242628',
-  border: '#2A2C30',
-  text: '#F3F3F3',
-  textLight: '#9EA3A8',
-  success: '#5BE7A9',
+  primary: '#FF6B6B', // neon coral
+  primaryDark: '#E65555',
+  secondary: '#4ECDC4',
+  tertiary: '#FFE66D',
+  background: '#0B0C10',
+  backgroundAlt: '#1F1B24',
+  surface: '#1F1B24',
+  surfaceAlt: '#27222E',
+  border: '#2F2835',
+  text: '#F5F5F5',
+  textLight: '#B9B9B9',
+  success: '#4ECDC4',
   info: '#4DA8DA',
-  warning: '#FFC94D',
-  danger: '#FF6A60',
-  focus: '#4DA8DA'
+  warning: '#FFE66D',
+  danger: '#FF6B6B',
+  focus: '#4DA8DA',
+  gradient: ['#0B0C10','#14161C','#1F1B24']
 };
 
 // Shared scale tokens
@@ -59,7 +63,7 @@ export const shadows = {
 };
 
 // Internal mutable reference so existing imports of `palette` keep working dynamically after ThemeProvider mount.
-let currentPalette = lightPalette;
+let currentPalette = darkPalette; // default to dark mode by default
 
 // Proxy so palette.primary etc always resolve to currentPalette
 // NOTE: Components still need to re-render to see changes; this is backward compatibility only.
@@ -73,7 +77,7 @@ const buildTheme = (pal) => ({ palette: pal, spacing, radii, typography: { ...ty
 // Context
 const ThemeContext = createContext({ theme: buildTheme(currentPalette), setMode: () => {}, mode: 'light', toggleMode: () => {}, reducedMotion: false, setReducedMotion: () => {}, toggleReducedMotion: () => {} });
 
-export const ThemeProvider = ({ initialMode = 'light', children, initialReducedMotion = false }) => {
+export const ThemeProvider = ({ initialMode = 'dark', children, initialReducedMotion = false }) => {
   const [mode, setMode] = useState(initialMode);
   const [reducedMotion, setReducedMotion] = useState(initialReducedMotion);
   const [hydrated, setHydrated] = useState(false);
