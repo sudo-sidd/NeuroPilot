@@ -3,7 +3,7 @@ import { Pressable, Text, StyleSheet, View, Animated } from 'react-native';
 import { useTheme, useThemeMode } from '../../constants/theme';
 
 // Simple Floating Action Button. For accessibility each screen supplies label & icon.
-const FAB = ({ icon='＋', label='Action', onPress, disabled=false }) => {
+const FAB = ({ icon='▶', label='Action', onPress, disabled=false }) => {
   const { palette } = useTheme();
   const { reducedMotion } = useThemeMode();
   const scale = useRef(new Animated.Value(1)).current;

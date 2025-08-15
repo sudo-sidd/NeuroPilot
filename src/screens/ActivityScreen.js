@@ -48,6 +48,11 @@ const ActivityScreen = ({ navigation }) => {
   };
 
   useEffect(() => { refresh(); }, []);
+  // Secondary delayed refresh to catch DB initialization race causing stale current activity on first open
+  useEffect(() => {
+    const t = setTimeout(() => { refresh(); }, 550);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (current) {

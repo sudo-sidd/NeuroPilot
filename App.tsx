@@ -73,14 +73,30 @@ const RootInner = () => {
   }, []);
   const chooseReport = (start) => { setReportModal(false); navigateSafe('ReportsTab', { start }); };
 
-  const fabHidden = current.includes('Settings') || current.includes('Journal') || current.includes('Reports');
+  // Show FAB only on Activity & Tasks tabs. Need current route early.
+  const fabHidden = !current || !(current.includes('Activity') || current.includes('Tasks'));
+
+  // If current not yet set shortly after mount, attempt to grab it.
+  useEffect(() => {
+    if (!current) {
+      const t = setTimeout(() => {
+        const r = navRef.getCurrentRoute();
+        if (r && r.name) setCurrent(r.name);
+      }, 40);
+      return () => clearTimeout(t);
+    }
+  }, [current]);
 
   return (
-    <NavigationContainer ref={navRef} onStateChange={() => setCurrent(navRef.getCurrentRoute()?.name || '')}>
+    <NavigationContainer
+      ref={navRef}
+      onReady={() => { const r = navRef.getCurrentRoute(); if (r && r.name) setCurrent(r.name); }}
+      onStateChange={() => setCurrent(navRef.getCurrentRoute()?.name || '')}
+    >
       <AppNavigator />
       {!fabHidden && (
         <FAB
-          icon={current.includes('Activity') ? (currentActivity ? '■' : '▶') : current.includes('Tasks') ? '＋' : current.includes('Journal') ? '📝' : current.includes('Reports') ? '📊' : '＋'}
+          icon={current.includes('Activity') ? (currentActivity ? '■' : '▶') : current.includes('Tasks') ? '＋' : '＋'}
           label="primary action"
           onPress={onFabPress}
         />

@@ -8,7 +8,6 @@ import ReportsScreen from '../screens/ReportsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ActivityScreen from '../screens/ActivityScreen';
 import DatabaseScreen from '../screens/DatabaseScreen';
-import FAB from '../components/ui/FAB';
 import { useTheme } from '../constants/theme';
 import { Text, View } from 'react-native';
 
