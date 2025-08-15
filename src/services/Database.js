@@ -661,3 +661,205 @@ export const getActiveStreaks = () => new Promise((resolve, reject) => {
     tx.executeSql('SELECT * FROM Streak', [], (_, { rows }) => { const arr = []; for (let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr); }, (_, e) => reject(e));
   });
 });
+
+export const getActivityById = (id) => new Promise((resolve, reject) => {
+  if (!id) return reject(new Error('id required'));
+  db.readTransaction(tx => {
+    tx.executeSql('SELECT a.*, c.name as action_class_name, c.color FROM Activity a JOIN ActionClass c ON a.action_class_id = c.action_class_id WHERE activity_id = ? LIMIT 1', [id], (_, { rows }) => {
+      resolve(rows.length ? rows.item(0) : null);
+    }, (_, e) => reject(e));
+  });
+});
+
+// Internal helpers for duration recalculation & date utilities
+const recalcDuration = (tx, id) => {
+  tx.executeSql(
+    `UPDATE Activity SET duration_ms = CASE WHEN end_time IS NOT NULL THEN (strftime('%s', end_time) - strftime('%s', start_time)) * 1000 ELSE NULL END WHERE activity_id = ?`,
+    [id]
+  );
+};
+
+const ISODate = iso => iso ? iso.slice(0,10) : null;
+
+// Split any multi-day activity into day-bounded chunks (UTC based) – returns promise
+const splitRolloverForActivity = (activityId) => new Promise((resolve, reject) => {
+  if (!activityId) return resolve(false);
+  db.transaction(tx => {
+    tx.executeSql('SELECT * FROM Activity WHERE activity_id = ? LIMIT 1', [activityId], (_, { rows }) => {
+      if (!rows.length) return resolve(false);
+      const act = rows.item(0);
+      if (!act.end_time) return resolve(false); // running – skip
+      let start = act.start_time;
+      const end = act.end_time;
+      const startDate = ISODate(start);
+      const endDate = ISODate(end);
+      if (startDate === endDate) { recalcDuration(tx, activityId); return resolve(false); }
+      // Need to split: update original to first midnight boundary segments
+      let finalEnd = end;
+      // We mutate the original row to end at first midnight
+      const firstBoundary = new Date(start);
+      firstBoundary.setUTCHours(24,0,0,0); // next UTC midnight
+      const firstBoundaryISO = firstBoundary.toISOString();
+      tx.executeSql('UPDATE Activity SET end_time = ? WHERE activity_id = ?', [firstBoundaryISO, activityId], () => {
+        recalcDuration(tx, activityId);
+        // Insert subsequent full/partial day segments
+        let segStart = firstBoundaryISO;
+        while (ISODate(segStart) !== ISODate(finalEnd)) {
+          const segBoundary = new Date(segStart);
+            segBoundary.setUTCHours(24,0,0,0);
+          const segEnd = segBoundary.toISOString() < finalEnd ? segBoundary.toISOString() : finalEnd;
+          tx.executeSql('INSERT INTO Activity (action_class_id, start_time, end_time, description, duration_ms) VALUES (?, ?, ?, ?, (strftime("%s", ?) - strftime("%s", ?))*1000)', [act.action_class_id, segStart, segEnd, act.description || '', segEnd, segStart]);
+          segStart = segEnd;
+          if (segEnd === finalEnd) break;
+        }
+        resolve(true);
+      });
+    }, (_, e) => reject(e));
+  });
+});
+
+// Normalize overlaps around a given activity id following agreed policy.
+// Policies: threshold 60s clamp; tiny fragments (< threshold) merged into larger neighbor (we choose larger duration; tie -> earlier).
+// Engulfed activities removed (merged into new larger segment).
+const normalizeAroundActivity = (activityId, { thresholdSeconds = 60 } = {}) => new Promise((resolve, reject) => {
+  if (!activityId) return resolve(false);
+  const thresholdMs = thresholdSeconds * 1000;
+  db.transaction(tx => {
+    tx.executeSql('SELECT * FROM Activity WHERE activity_id = ? LIMIT 1', [activityId], (_, { rows }) => {
+      if (!rows.length) return resolve(false);
+      const cur = rows.item(0);
+      const curStart = new Date(cur.start_time).getTime();
+      const curEnd = cur.end_time ? new Date(cur.end_time).getTime() : null;
+
+      // Remove engulfed activities fully within current range
+      if (curEnd) {
+        tx.executeSql('SELECT activity_id, start_time, end_time FROM Activity WHERE activity_id != ? AND start_time >= ? AND end_time IS NOT NULL AND end_time <= ?', [activityId, cur.start_time, cur.end_time], (_, { rows: eng }) => {
+          for (let i=0;i<eng.length;i++) {
+            const eId = eng.item(i).activity_id;
+            tx.executeSql('DELETE FROM Activity WHERE activity_id = ?', [eId]);
+          }
+        });
+      }
+
+      // Previous neighbor
+      tx.executeSql('SELECT * FROM Activity WHERE start_time < ? ORDER BY start_time DESC LIMIT 1', [cur.start_time], (_, prevRes) => {
+        const prev = prevRes.rows.length ? prevRes.rows.item(0) : null;
+        if (prev && prev.end_time) {
+          const prevEnd = new Date(prev.end_time).getTime();
+          if (prevEnd > curStart) {
+            // overlap – clamp prev end to cur start
+            tx.executeSql('UPDATE Activity SET end_time = ? WHERE activity_id = ?', [cur.start_time, prev.activity_id]);
+            recalcDuration(tx, prev.activity_id);
+            const newPrevDurMs = new Date(cur.start_time).getTime() - new Date(prev.start_time).getTime();
+            if (newPrevDurMs > 0 && newPrevDurMs < thresholdMs) {
+              // merge into larger neighbor (current vs previous)
+              const curDurMs = curEnd ? (curEnd - curStart) : thresholdMs + 1; // running activity treated as large
+              if (curDurMs >= newPrevDurMs) {
+                // extend current backward
+                tx.executeSql('UPDATE Activity SET start_time = ? WHERE activity_id = ?', [prev.start_time, activityId]);
+                recalcDuration(tx, activityId);
+                tx.executeSql('DELETE FROM Activity WHERE activity_id = ?', [prev.activity_id]);
+              } else {
+                // extend previous forward by restoring part (rare if cur shorter)
+                const shiftedStart = prev.start_time; // keep as-is
+              }
+            }
+          }
+        }
+        // Next neighbor
+        if (curEnd) {
+          tx.executeSql('SELECT * FROM Activity WHERE start_time > ? ORDER BY start_time ASC LIMIT 1', [cur.start_time], (_, nextRes) => {
+            const next = nextRes.rows.length ? nextRes.rows.item(0) : null;
+            if (next && next.start_time) {
+              const nextStart = new Date(next.start_time).getTime();
+              if (curEnd > nextStart) {
+                // overlap – clamp next start to cur end
+                tx.executeSql('UPDATE Activity SET start_time = ? WHERE activity_id = ?', [cur.end_time, next.activity_id]);
+                recalcDuration(tx, next.activity_id);
+                if (next.end_time) {
+                  const nextEnd = new Date(next.end_time).getTime();
+                  const newNextDurMs = nextEnd - new Date(cur.end_time).getTime();
+                  if (newNextDurMs > 0 && newNextDurMs < thresholdMs) {
+                    // merge into larger neighbor between current & next
+                    const curDurMs2 = curEnd - curStart;
+                    if (curDurMs2 >= newNextDurMs) {
+                      // absorb next – extend current end
+                      tx.executeSql('UPDATE Activity SET end_time = ? WHERE activity_id = ?', [next.end_time, activityId]);
+                      recalcDuration(tx, activityId);
+                      tx.executeSql('DELETE FROM Activity WHERE activity_id = ?', [next.activity_id]);
+                    } else {
+                      // absorb current into next (extend next backward)
+                      tx.executeSql('UPDATE Activity SET start_time = ? WHERE activity_id = ?', [cur.start_time, next.activity_id]);
+                      recalcDuration(tx, next.activity_id);
+                      tx.executeSql('DELETE FROM Activity WHERE activity_id = ?', [activityId]);
+                    }
+                  }
+                }
+              }
+            }
+            // Final duration recalculation for current if still exists
+            recalcDuration(tx, activityId);
+            resolve(true);
+          });
+        } else {
+          recalcDuration(tx, activityId);
+          resolve(true);
+        }
+      });
+    }, (_, e) => reject(e));
+  });
+});
+
+export const updateActivity = ({ id, actionClassId, startISO, endISO, description }) => new Promise((resolve, reject) => {
+  if (!id) return reject(new Error('id required'));
+  db.transaction(tx => {
+    const sets = [];
+    const vals = [];
+    if (actionClassId !== undefined) { sets.push('action_class_id = ?'); vals.push(actionClassId); }
+    if (startISO !== undefined) { sets.push('start_time = ?'); vals.push(startISO); }
+    if (endISO !== undefined) { sets.push('end_time = ?'); vals.push(endISO); }
+    if (description !== undefined) { sets.push('description = ?'); vals.push(description); }
+    if (!sets.length) return resolve(0);
+    tx.executeSql(`UPDATE Activity SET ${sets.join(', ')} WHERE activity_id = ?`, [...vals, id], () => {}, (_, e) => reject(e));
+  }, err => reject(err), async () => {
+    try { await splitRolloverForActivity(id); await normalizeAroundActivity(id); DeviceEventEmitter.emit('activityUpdated'); resolve(1); } catch(e){ reject(e); }
+  });
+});
+
+export const deleteActivity = (id) => new Promise((resolve, reject) => {
+  if (!id) return reject(new Error('id required'));
+  db.transaction(tx => {
+    tx.executeSql('DELETE FROM Activity WHERE activity_id = ?', [id], (_, r) => resolve(r.rowsAffected), (_, e) => reject(e));
+  }, e => reject(e), () => { DeviceEventEmitter.emit('activityUpdated'); });
+});
+
+// Manual create with normalization + rollover + neighbor fixes
+export const createActivity = ({ actionClassId, startISO, endISO, description = '' }) => new Promise((resolve, reject) => {
+  if (!actionClassId) return reject(new Error('actionClassId required'));
+  if (!startISO || !endISO) return reject(new Error('start & end required'));
+  if (new Date(endISO) <= new Date(startISO)) return reject(new Error('End must be after start'));
+  db.transaction(tx => {
+    tx.executeSql('INSERT INTO Activity (action_class_id, start_time, end_time, description) VALUES (?, ?, ?, ?)', [actionClassId, startISO, endISO, description], (_, res) => {
+      const newId = res.insertId;
+      // durations handled in normalization
+      splitRolloverForActivity(newId).then(() => normalizeAroundActivity(newId).then(() => {
+        DeviceEventEmitter.emit('activityUpdated');
+        resolve(newId);
+      }));
+    }, (_, e) => reject(e));
+  });
+});
+
+// Wrap original stopCurrentActivity with rollover + normalization for the activity that was running
+const _origStop = stopCurrentActivity;
+export const stopCurrentActivityWithNormalization = async () => {
+  const running = await getCurrentActivity();
+  await stopCurrentActivity();
+  if (running) {
+    try {
+      await splitRolloverForActivity(running.activity_id);
+      await normalizeAroundActivity(running.activity_id);
+      DeviceEventEmitter.emit('activityUpdated');
+    } catch {}
+  }
+};
