@@ -1,25 +1,35 @@
-import React from 'react';
-import { Pressable, Text, StyleSheet, View } from 'react-native';
-import { useTheme } from '../../constants/theme';
+import React, { useRef } from 'react';
+import { Pressable, Text, StyleSheet, View, Animated } from 'react-native';
+import { useTheme, useThemeMode } from '../../constants/theme';
 
 // Simple Floating Action Button. For accessibility each screen supplies label & icon.
 const FAB = ({ icon='＋', label='Action', onPress, disabled=false }) => {
   const { palette } = useTheme();
+  const { reducedMotion } = useThemeMode();
+  const scale = useRef(new Animated.Value(1)).current;
+  const handlePressIn = () => { if (!reducedMotion) Animated.spring(scale, { toValue: 0.9, useNativeDriver: true }).start(); };
+  const handlePressOut = () => { if (!reducedMotion) Animated.spring(scale, { toValue: 1, friction:5, tension:180, useNativeDriver: true }).start(); };
   return (
     <View pointerEvents="box-none" style={styles.wrap}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        onPress={onPress}
-        disabled={disabled}
-        style={({ pressed }) => [
-          styles.btn,
-          { backgroundColor: disabled ? palette.border : palette.primary, shadowColor: '#000' },
-          pressed && { transform: [{ scale: 0.95 }], opacity: 0.9 }
-        ]}
-      >
-        <Text style={[styles.icon, { color: '#FFF' }]}>{icon}</Text>
-      </Pressable>
+      <Animated.View style={{ transform:[{ scale }] }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={label}
+          accessibilityHint="Double tap to perform primary action"
+          hitSlop={10}
+          onPress={onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          disabled={disabled}
+          style={({ pressed }) => [
+            styles.btn,
+            { backgroundColor: disabled ? palette.border : palette.primary, shadowColor: '#000' },
+            pressed && { opacity: 0.9 }
+          ]}
+        >
+          <Text style={[styles.icon, { color: '#FFF' }]} allowFontScaling>{icon}</Text>
+        </Pressable>
+      </Animated.View>
     </View>
   );
 };

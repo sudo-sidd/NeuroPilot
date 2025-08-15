@@ -12,6 +12,18 @@ import OptionsDrawer from '../components/ui/OptionsDrawer';
 const isoToday = () => new Date().toISOString().slice(0,10);
 const mondayOfWeek = (iso) => { const d = new Date(iso + 'T00:00:00Z'); const day = d.getUTCDay(); const diff = (day === 0 ? -6 : 1 - day); d.setUTCDate(d.getUTCDate() + diff); return d.toISOString().slice(0,10); };
 
+const ChartPlaceholder = ({ title, height=160, children }) => {
+  const { palette, spacing } = useTheme();
+  return (
+    <View style={{ marginTop: spacing(4) }}>
+      <Text style={{ fontSize:14, fontWeight:'600', color: palette.text, marginBottom: spacing(2) }}>{title}</Text>
+      <View style={{ height, borderWidth:1, borderColor: palette.border, borderRadius:8, alignItems:'center', justifyContent:'center', backgroundColor: palette.surfaceAlt || palette.surface }}>
+        {children || <Text style={{ fontSize:12, color: palette.textLight }}>Chart coming soon</Text>}
+      </View>
+    </View>
+  );
+};
+
 const ReportsScreen = ({ navigation }) => {
   const { palette, typography, spacing } = useTheme();
   const [start, setStart] = useState(mondayOfWeek(isoToday()));
@@ -51,20 +63,9 @@ const ReportsScreen = ({ navigation }) => {
           <Card style={{ marginTop: spacing(4) }}>
             <SectionHeader title="Summary" />
             <Text style={{ marginTop: spacing(2), fontSize:12, color: palette.textLight }}>Range: {report.range.start} → {report.range.end}</Text>
-            <Text style={{ marginTop: spacing(4), fontSize:14, fontWeight:'600', color: palette.text }}>Activities</Text>
-            <FlatList
-              data={report.activities}
-              keyExtractor={(item) => String(item.action_class_id)}
-              scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={{ height:1, backgroundColor: palette.border }} />}
-              renderItem={({ item }) => (
-                <View style={{ flexDirection:'row', alignItems:'center', paddingVertical: spacing(2) }}>
-                  <View style={{ width:10, height:10, borderRadius:5, marginRight: spacing(2), backgroundColor: item.color || palette.primary }} />
-                  <Text style={{ flex:1, fontSize:14, color: palette.text }}>{item.name}</Text>
-                  <Text style={{ fontSize:12, color: palette.textLight }}>{Math.round(item.total_duration_ms / 60000)}m</Text>
-                </View>
-              )}
-            />
+            <ChartPlaceholder title="Activity Time (Stacked Bars)" />
+            <ChartPlaceholder title="Mood Trend (Line)" />
+            <ChartPlaceholder title="Task Completion (Donut)" />
             <View style={{ flexDirection:'row', justifyContent:'space-between', marginTop: spacing(4) }}>
               <View style={{ flex:1, alignItems:'center' }}>
                 <Text style={{ fontSize:11, color: palette.textLight, textTransform:'uppercase' }}>Tasks</Text>

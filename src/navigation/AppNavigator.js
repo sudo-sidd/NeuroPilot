@@ -2,7 +2,6 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import HomeScreen from '../screens/HomeScreen';
 import TaskScreen from '../screens/TaskScreen';
 import DailyFormScreen from '../screens/DailyFormScreen';
 import ReportsScreen from '../screens/ReportsScreen';
@@ -28,7 +27,7 @@ const MainTabs = () => {
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' }
       }}
     >
-      <Tab.Screen name="ActivityTab" component={HomeScreen} options={{ title: 'Activity', tabBarIcon: () => <Text>⏱️</Text> }} />
+      <Tab.Screen name="ActivityTab" component={ActivityScreen} options={{ title: 'Activity', tabBarIcon: () => <Text>⏱️</Text> }} />
       <Tab.Screen name="TasksTab" component={TaskScreen} options={{ title: 'Tasks', tabBarIcon: () => <Text>🗂️</Text> }} />
       <Tab.Screen name="JournalTab" component={DailyFormScreen} options={{ title: 'Journal', tabBarIcon: () => <Text>📝</Text> }} />
       <Tab.Screen name="ReportsTab" component={ReportsScreen} options={{ title: 'Reports', tabBarIcon: () => <Text>📊</Text> }} />

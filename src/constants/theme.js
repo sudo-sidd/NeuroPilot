@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useMemo, useState, useCallback } from 'react';
+import React, { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
+import { getPreference } from '../services/Database';
 
 // Design token definitions (Phase 1 Theme System)
 const lightPalette = {
@@ -70,33 +71,47 @@ export let palette = new Proxy({}, { get: (_, prop) => currentPalette[prop] });
 const buildTheme = (pal) => ({ palette: pal, spacing, radii, typography: { ...typography, small: typography.small(pal) }, shadows });
 
 // Context
-const ThemeContext = createContext({ theme: buildTheme(currentPalette), setMode: () => {}, mode: 'light', toggleMode: () => {} });
+const ThemeContext = createContext({ theme: buildTheme(currentPalette), setMode: () => {}, mode: 'light', toggleMode: () => {}, reducedMotion: false, setReducedMotion: () => {}, toggleReducedMotion: () => {} });
 
-export const ThemeProvider = ({ initialMode = 'light', children }) => {
+export const ThemeProvider = ({ initialMode = 'light', children, initialReducedMotion = false }) => {
   const [mode, setMode] = useState(initialMode);
+  const [reducedMotion, setReducedMotion] = useState(initialReducedMotion);
+  const [hydrated, setHydrated] = useState(false);
 
-  const setModeSafe = useCallback((next) => {
-    setMode(next);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const savedMode = await getPreference('theme_mode');
+        const savedMotion = await getPreference('reduced_motion');
+        if (mounted) {
+          if (savedMode && (savedMode === 'light' || savedMode === 'dark')) setMode(savedMode);
+          if (savedMotion === '1') setReducedMotion(true);
+          setHydrated(true);
+        }
+      } catch { setHydrated(true); }
+    })();
+    return () => { mounted = false; };
   }, []);
 
-  const toggleMode = useCallback(() => {
-    setMode(m => (m === 'light' ? 'dark' : 'light'));
-  }, []);
+  const setModeSafe = useCallback((next) => { setMode(next); }, []);
+  const toggleMode = useCallback(() => { setMode(m => (m === 'light' ? 'dark' : 'light')); }, []);
+  const toggleReducedMotion = useCallback(() => { setReducedMotion(v => !v); }, []);
 
   const theme = useMemo(() => {
     currentPalette = mode === 'dark' ? darkPalette : lightPalette; // mutate reference for legacy imports
     return buildTheme(currentPalette);
   }, [mode]);
 
-  const value = useMemo(() => ({ theme, setMode: setModeSafe, mode, toggleMode }), [theme, setModeSafe, mode, toggleMode]);
+  const value = useMemo(() => ({ theme, setMode: setModeSafe, mode, toggleMode, reducedMotion, setReducedMotion, toggleReducedMotion }), [theme, setModeSafe, mode, toggleMode, reducedMotion]);
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={value}>{hydrated ? children : null}</ThemeContext.Provider>;
 };
 
 export const useTheme = () => useContext(ThemeContext).theme;
 export const useThemeMode = () => {
-  const { mode, setMode, toggleMode } = useContext(ThemeContext);
-  return { mode, setMode, toggleMode };
+  const { mode, setMode, toggleMode, reducedMotion, setReducedMotion, toggleReducedMotion } = useContext(ThemeContext);
+  return { mode, setMode, toggleMode, reducedMotion, setReducedMotion, toggleReducedMotion };
 };
 
 // Backward compatible default export

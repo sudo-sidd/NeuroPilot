@@ -78,6 +78,23 @@ export const migrations = [
     statements: [
       `ALTER TABLE Task ADD COLUMN reminder_notification_id TEXT`
     ]
+  },
+  {
+    version: 8,
+    statements: [
+      `ALTER TABLE ActionClass ADD COLUMN emoji TEXT`,
+      `ALTER TABLE Task ADD COLUMN snoozed_until TEXT`,
+      `CREATE TABLE IF NOT EXISTS Preference (key TEXT PRIMARY KEY, value TEXT)` ,
+      `CREATE TABLE IF NOT EXISTS Streak (
+        streak_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        type TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT,
+        count INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_task_snoozed_until ON Task(snoozed_until)`
+    ]
   }
 ];
 

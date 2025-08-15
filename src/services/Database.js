@@ -631,3 +631,33 @@ export const createActivityManual = ({ actionClassId = 1, startISO, endISO, desc
     });
   });
 };
+
+// Preferences helpers
+export const setPreference = (key, value) => new Promise((resolve, reject) => {
+  db.transaction(tx => {
+    tx.executeSql('INSERT INTO Preference (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [key, value], () => resolve(true), (_, e) => reject(e));
+  });
+});
+
+export const getPreference = (key, defaultValue = null) => new Promise((resolve) => {
+  db.readTransaction(tx => {
+    tx.executeSql('SELECT value FROM Preference WHERE key = ? LIMIT 1', [key], (_, { rows }) => {
+      if (rows.length) return resolve(rows.item(0).value);
+      resolve(defaultValue);
+    });
+  });
+});
+
+// Snooze / Streak helpers
+export const snoozeTask = (id, untilISO) => new Promise((resolve, reject) => {
+  if (!id) return reject(new Error('Task ID required'));
+  db.transaction(tx => {
+    tx.executeSql('UPDATE Task SET snoozed_until = ? WHERE task_id = ?', [untilISO, id], (_, r) => resolve(r.rowsAffected), (_, e) => reject(e));
+  });
+});
+
+export const getActiveStreaks = () => new Promise((resolve, reject) => {
+  db.readTransaction(tx => {
+    tx.executeSql('SELECT * FROM Streak', [], (_, { rows }) => { const arr = []; for (let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr); }, (_, e) => reject(e));
+  });
+});
