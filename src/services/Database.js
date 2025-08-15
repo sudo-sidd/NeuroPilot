@@ -214,20 +214,78 @@ export const deleteActionClass = (id) => {
   });
 };
 
+// TaskClass helpers (added to support task class selection in UI)
+export const listTaskClasses = () => {
+  return new Promise((resolve, reject) => {
+    db.readTransaction(tx => {
+      tx.executeSql('SELECT * FROM TaskClass ORDER BY name ASC', [], (_, { rows }) => {
+        const arr = []; for (let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr);
+      }, (_, e) => reject(e));
+    });
+  });
+};
+
+export const createTaskClass = ({ name, color = '#607D8B' }) => {
+  return new Promise((resolve, reject) => {
+    if (!name || !name.trim()) return reject(new Error('Name required'));
+    db.transaction(tx => {
+      tx.executeSql(
+        'INSERT INTO TaskClass (name, color) VALUES (?, ?)',
+        [name.trim(), color],
+        (_, result) => resolve(result.insertId),
+        (_, error) => {
+          if (String(error.message || '').includes('UNIQUE')) return reject(new Error('Duplicate name'));
+          reject(error);
+        }
+      );
+    });
+  });
+};
+
+export const updateTaskClass = (id, { name, color }) => {
+  return new Promise((resolve, reject) => {
+    if (!id) return reject(new Error('ID required'));
+    const fields = []; const values = [];
+    if (name) { fields.push('name = ?'); values.push(name.trim()); }
+    if (color) { fields.push('color = ?'); values.push(color); }
+    if (!fields.length) return resolve(0);
+    values.push(id);
+    db.transaction(tx => {
+      tx.executeSql(`UPDATE TaskClass SET ${fields.join(', ')} WHERE task_class_id = ?`, values, (_, r) => resolve(r.rowsAffected), (_, e) => {
+        if (String(e.message || '').includes('UNIQUE')) return reject(new Error('Duplicate name'));
+        reject(e);
+      });
+    });
+  });
+};
+
+export const deleteTaskClass = (id) => {
+  return new Promise((resolve, reject) => {
+    if (!id) return reject(new Error('ID required'));
+    db.transaction(tx => {
+      // Prevent deletion if referenced by any Task
+      tx.executeSql('SELECT COUNT(*) as cnt FROM Task WHERE task_class_id = ?', [id], (_, { rows }) => {
+        if (rows.item(0).cnt > 0) return reject(new Error('Cannot delete: in use by tasks'));
+        tx.executeSql('DELETE FROM TaskClass WHERE task_class_id = ?', [id], (_, r) => resolve(r.rowsAffected), (_, e) => reject(e));
+      });
+    });
+  });
+};
+
 // Phase 3 Task helpers
-export const createTask = ({ name, description = '', dueDate = null, repetitionType = null, repetitionDays = null, reminderTime = null }) => {
+export const createTask = ({ name, description = '', dueDate = null, repetitionType = null, repetitionDays = null, reminderTime = null, priority = 3, taskClassId = null, startDate = null, startTime = null, dueTime = null }) => {
   return new Promise((resolve, reject) => {
     if (!name || !name.trim()) return reject(new Error('Task name required'));
     const daysStr = Array.isArray(repetitionDays) ? repetitionDays.join(',') : repetitionDays;
     db.transaction(tx => {
       tx.executeSql(
-        'INSERT INTO Task (name, description, due_date, repetition_type, repetition_days) VALUES (?, ?, ?, ?, ?)',
-        [name.trim(), description, dueDate, repetitionType, daysStr],
+        'INSERT INTO Task (name, description, due_date, repetition_type, repetition_days, priority, task_class_id, start_date, start_time, due_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [name.trim(), description, dueDate, repetitionType, daysStr, priority, taskClassId, startDate, startTime, dueTime],
         async (_, result) => {
           const id = result.insertId;
           if (dueDate && reminderTime) {
             try {
-              const fireDate = new Date(dueDate + 'T' + reminderTime + ':00');
+              const fireDate = new Date(dueDate + 'T' + (dueTime || reminderTime) + ':00');
               const notifId = await scheduleTaskReminder({ taskId: id, title: 'Task Due', body: name, fireDate });
               db.transaction(tt => tt.executeSql('UPDATE Task SET reminder_notification_id = ? WHERE task_id = ?', [notifId, id]));
             } catch {}
@@ -240,7 +298,7 @@ export const createTask = ({ name, description = '', dueDate = null, repetitionT
   });
 };
 
-export const updateTask = (id, { name, description, dueDate, completed, repetitionType, repetitionDays, reminderTime }) => {
+export const updateTask = (id, { name, description, dueDate, completed, repetitionType, repetitionDays, reminderTime, priority, taskClassId, startDate, startTime, dueTime }) => {
   return new Promise((resolve, reject) => {
     if (!id) return reject(new Error('Task ID required'));
     const fields = [];
@@ -251,6 +309,11 @@ export const updateTask = (id, { name, description, dueDate, completed, repetiti
     if (completed !== undefined) { fields.push('completed = ?'); values.push(completed ? 1 : 0); }
     if (repetitionType !== undefined) { fields.push('repetition_type = ?'); values.push(repetitionType); }
     if (repetitionDays !== undefined) { fields.push('repetition_days = ?'); values.push(Array.isArray(repetitionDays) ? repetitionDays.join(',') : repetitionDays); }
+    if (priority !== undefined) { fields.push('priority = ?'); values.push(priority); }
+    if (taskClassId !== undefined) { fields.push('task_class_id = ?'); values.push(taskClassId); }
+    if (startDate !== undefined) { fields.push('start_date = ?'); values.push(startDate); }
+    if (startTime !== undefined) { fields.push('start_time = ?'); values.push(startTime); }
+    if (dueTime !== undefined) { fields.push('due_time = ?'); values.push(dueTime); }
     if (!fields.length && reminderTime === undefined) return resolve(0);
     fields.push('updated_at = datetime("now")');
     const sql = `UPDATE Task SET ${fields.join(', ')} WHERE task_id = ?`;
@@ -306,7 +369,7 @@ export const deleteTask = (id) => {
 export const getTasks = ({ includeCompleted = true } = {}) => {
   return new Promise((resolve, reject) => {
     db.transaction(tx => {
-      const sql = includeCompleted ? 'SELECT * FROM Task ORDER BY completed, due_date IS NULL, due_date ASC' : 'SELECT * FROM Task WHERE completed = 0 ORDER BY due_date IS NULL, due_date ASC';
+      const sql = includeCompleted ? 'SELECT * FROM Task ORDER BY completed, (CASE WHEN due_date IS NULL THEN 1 ELSE 0 END), completed = 0 AND due_date < date("now"), priority DESC, due_date ASC' : 'SELECT * FROM Task WHERE completed = 0 ORDER BY (CASE WHEN due_date IS NULL THEN 1 ELSE 0 END), due_date ASC, priority DESC';
       tx.executeSql(sql, [], (_, { rows }) => {
         const tasks = [];
         for (let i = 0; i < rows.length; i++) tasks.push(rows.item(i));
@@ -480,7 +543,7 @@ export const getWeeklyReport = (startDate) => {
 };
 
 // Phase 8 Recurring Template Helpers
-export const createRecurringTemplate = ({ name, description = '', patternType, patternDays = '', everyOtherSeed = null }) => {
+export const createRecurringTemplate = ({ name, description = '', patternType, patternDays = '', everyOtherSeed = null, priority = 3, taskClassId = null }) => {
   return new Promise((resolve, reject) => {
     if (!name || !name.trim()) return reject(new Error('Name required'));
     if (!patternType) return reject(new Error('patternType required'));
@@ -498,8 +561,8 @@ export const createRecurringTemplate = ({ name, description = '', patternType, p
     }
     db.transaction(tx => {
       tx.executeSql(
-        'INSERT INTO RecurringTemplate (name, description, pattern_type, pattern_days, every_other_seed) VALUES (?, ?, ?, ?, ?)',
-        [name.trim(), description, patternType, patternDays, everyOtherSeed],
+        'INSERT INTO RecurringTemplate (name, description, pattern_type, pattern_days, every_other_seed, priority, task_class_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [name.trim(), description, patternType, patternDays, everyOtherSeed, priority, taskClassId],
         (_, result) => resolve(result.insertId),
         (_, error) => reject(error)
       );
@@ -507,7 +570,7 @@ export const createRecurringTemplate = ({ name, description = '', patternType, p
   });
 };
 
-export const updateRecurringTemplate = (id, { name, description, patternType, patternDays, everyOtherSeed, active }) => {
+export const updateRecurringTemplate = (id, { name, description, patternType, patternDays, everyOtherSeed, active, priority, taskClassId }) => {
   return new Promise((resolve, reject) => {
     if (!id) return reject(new Error('ID required'));
     const fields = [];
@@ -530,6 +593,8 @@ export const updateRecurringTemplate = (id, { name, description, patternType, pa
     }
     if (everyOtherSeed !== undefined) { fields.push('every_other_seed = ?'); values.push(everyOtherSeed); }
     if (active !== undefined) { fields.push('active = ?'); values.push(active ? 1 : 0); }
+    if (priority !== undefined) { fields.push('priority = ?'); values.push(priority); }
+    if (taskClassId !== undefined) { fields.push('task_class_id = ?'); values.push(taskClassId); }
     if (!fields.length) return resolve(0);
     fields.push('updated_at = datetime("now")');
     values.push(id);
@@ -575,8 +640,8 @@ export const generateRecurringInstances = ({ daysAhead = 7 } = {}) => {
             (_, existing) => {
               if (existing.rows.length) return; // already generated
               tx.executeSql(
-                'INSERT INTO Task (name, description, due_date, completed, template_id, is_generated, source_generation_date) VALUES (?, ?, ?, 0, ?, 1, ?)',
-                [tpl.name, tpl.description || '', dateStr, tpl.template_id, dateStr],
+                'INSERT INTO Task (name, description, due_date, completed, template_id, is_generated, source_generation_date, priority, task_class_id) VALUES (?, ?, ?, 0, ?, 1, ?, ?, ?)',
+                [tpl.name, tpl.description || '', dateStr, tpl.template_id, dateStr, tpl.priority || 3, tpl.task_class_id || null],
                 () => { generated += 1; },
                 () => {}
               );
@@ -860,6 +925,6 @@ export const stopCurrentActivityWithNormalization = async () => {
       await splitRolloverForActivity(running.activity_id);
       await normalizeAroundActivity(running.activity_id);
       DeviceEventEmitter.emit('activityUpdated');
-    } catch {}
+    } catch(e) { /* swallow */ }
   }
 };

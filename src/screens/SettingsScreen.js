@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 // Removed FlatList import to avoid nested VirtualizedList
-import { getActionClasses, createActionClass, updateActionClass, deleteActionClass, setPreference, getPreference } from '../services/Database';
+import { getActionClasses, createActionClass, updateActionClass, deleteActionClass, setPreference, getPreference, listTaskClasses, createTaskClass, updateTaskClass, deleteTaskClass } from '../services/Database';
 import { useTheme, useThemeMode } from '../constants/theme';
 import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
@@ -22,14 +22,24 @@ const SettingsScreen = ({ navigation }) => {
   const [showClassManager, setShowClassManager] = useState(false);
   const [newColor, setNewColor] = useState('#2196F3');
   const [editColor, setEditColor] = useState(null);
+  // Task Class state
+  const [taskClasses, setTaskClasses] = useState([]);
+  const [taskClassName, setTaskClassName] = useState('');
+  const [taskNewColor, setTaskNewColor] = useState('#607D8B');
+  const [taskEditId, setTaskEditId] = useState(null);
+  const [taskEditName, setTaskEditName] = useState('');
+  const [taskEditColor, setTaskEditColor] = useState(null);
+  const [taskError, setTaskError] = useState(null);
+  const [showTaskClassManager, setShowTaskClassManager] = useState(false);
   const colorPalette = React.useMemo(()=>{
-    return [
+    const base = [
       '#EF5350','#E91E63','#D81B60','#AD1457','#880E4F','#F06292','#EC407A','#AB47BC','#9C27B0','#8E24AA','#7B1FA2','#6A1B9A',
       '#BA68C8','#9575CD','#673AB7','#5E35B1','#512DA8','#4527A0','#311B92','#3F51B5','#3949AB','#303F9F','#283593','#1A237E',
-      '#2196F3','#1E88E5','#1976D2','#1565C0','#0D47A1','#64B5F6','#42A5F5','#90CAF9','#64B5F6','#42A5F5','#29B6F6','#03A9F4',
+      '#2196F3','#1E88E5','#1976D2','#1565C0','#0D47A1','#64B5F6','#42A5F5','#29B6F6','#03A9F4',
       '#00ACC1','#0097A7','#00838F','#006064','#4DD0E1','#26C6DA','#00BCD4','#80DEEA','#4DB6AC','#26A69A','#009688','#00796B',
       '#004D40','#66BB6A','#43A047','#388E3C','#2E7D32','#1B5E20','#8BC34A','#7CB342','#689F38','#558B2F','#33691E','#CDDC39'
-    ].slice(0,60); // ensure 60
+    ];
+    return Array.from(new Set(base)); // ensure uniqueness
   },[]);
 
   const refresh = async () => {
@@ -38,8 +48,15 @@ const SettingsScreen = ({ navigation }) => {
       setClasses(c);
     } catch (e) { setError(e.message); }
   };
+  const refreshTaskClasses = async () => {
+    try {
+      const t = await listTaskClasses();
+      setTaskClasses(t);
+    } catch (e) { setTaskError(e.message); }
+  };
 
   useEffect(() => { refresh(); }, []);
+  useEffect(() => { if (showTaskClassManager) refreshTaskClasses(); }, [showTaskClassManager]);
   useEffect(() => {
     (async () => {
       const savedTheme = await getPreference('theme_mode');
@@ -119,6 +136,14 @@ const SettingsScreen = ({ navigation }) => {
               <Text style={{ marginTop: spacing(1), fontSize:12, color: palette.primary }}>{showClassManager ? 'Hide' : 'Manage'}</Text>
             </Card>
           </TouchableOpacity>
+          {/* Task Class Manager */}
+          <TouchableOpacity onPress={() => setShowTaskClassManager(s => !s)} style={{ width:'50%', padding: spacing(1) }} accessibilityRole="button" accessibilityLabel="Manage task classes">
+            <Card>
+              <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }}>Task Classes</Text>
+              <Text style={{ marginTop: spacing(1), fontSize:12, color: palette.textLight }}>{taskClasses.length} total</Text>
+              <Text style={{ marginTop: spacing(1), fontSize:12, color: palette.primary }}>{showTaskClassManager ? 'Hide' : 'Manage'}</Text>
+            </Card>
+          </TouchableOpacity>
         </View>
         {showClassManager && (
           <Card style={{ marginTop: spacing(4) }}>
@@ -129,8 +154,8 @@ const SettingsScreen = ({ navigation }) => {
             </View>
             {/* Color grid for new class */}
             <View style={{ flexWrap:'wrap', flexDirection:'row', marginBottom: spacing(2) }}>
-              {colorPalette.map(c => (
-                <TouchableOpacity key={c+'new'} onPress={()=>setNewColor(c)} style={{ width:'8.33%', aspectRatio:1, padding:2 }}>
+              {colorPalette.map((c,i) => (
+                <TouchableOpacity key={`new-${i}-${c}`} onPress={()=>setNewColor(c)} style={{ width:'8.33%', aspectRatio:1, padding:2 }}>
                   <View style={{ flex:1, borderRadius:6, backgroundColor:c, borderWidth: newColor===c ? 3 : 1, borderColor: newColor===c ? palette.text : palette.border }} />
                 </TouchableOpacity>
               ))}
@@ -143,8 +168,8 @@ const SettingsScreen = ({ navigation }) => {
                   <PrimaryButton small title="Cancel" onPress={() => { setEditId(null); setEditName(''); setEditColor(null); }} />
                 </View>
                 <View style={{ flexWrap:'wrap', flexDirection:'row' }}>
-                  {colorPalette.map(c => (
-                    <TouchableOpacity key={c+'edit'} onPress={()=>setEditColor(c)} style={{ width:'8.33%', aspectRatio:1, padding:2 }}>
+                  {colorPalette.map((c,i) => (
+                    <TouchableOpacity key={`edit-${i}-${c}`} onPress={()=>setEditColor(c)} style={{ width:'8.33%', aspectRatio:1, padding:2 }}>
                       <View style={{ flex:1, borderRadius:6, backgroundColor:c, borderWidth: editColor===c ? 3 : 1, borderColor: editColor===c ? palette.text : palette.border }} />
                     </TouchableOpacity>
                   ))}
@@ -163,6 +188,50 @@ const SettingsScreen = ({ navigation }) => {
                 </View>
               ))}
               {!classes.length && <Text style={{ fontSize:12, color: palette.textLight }}>No classes yet.</Text>}
+            </View>
+          </Card>
+        )}
+        {showTaskClassManager && (
+          <Card style={{ marginTop: spacing(4) }}>
+            <SectionHeader title="Manage Task Classes" />
+            <View style={{ flexDirection:'row', alignItems:'center', marginTop: spacing(2), marginBottom: spacing(3) }}>
+              <Input placeholder="New task class name" value={taskClassName} onChangeText={setTaskClassName} style={{ flex:1 }} />
+              <PrimaryButton small title="Add" onPress={async () => { setTaskError(null); try { await createTaskClass({ name: taskClassName, color: taskNewColor }); setTaskClassName(''); setTaskNewColor(colorPalette[0]); refreshTaskClasses(); } catch(e){ setTaskError(e.message); } }} />
+            </View>
+            <View style={{ flexWrap:'wrap', flexDirection:'row', marginBottom: spacing(2) }}>
+              {colorPalette.map((c,i) => (
+                <TouchableOpacity key={`taskNew-${i}-${c}`} onPress={()=>setTaskNewColor(c)} style={{ width:'8.33%', aspectRatio:1, padding:2 }}>
+                  <View style={{ flex:1, borderRadius:6, backgroundColor:c, borderWidth: taskNewColor===c ? 3 : 1, borderColor: taskNewColor===c ? palette.text : palette.border }} />
+                </TouchableOpacity>
+              ))}
+            </View>
+            {taskEditId && (
+              <View style={{ marginBottom: spacing(3) }}>
+                <View style={{ flexDirection:'row', alignItems:'center', marginBottom: spacing(2) }}>
+                  <Input placeholder="Edit task class name" value={taskEditName} onChangeText={setTaskEditName} style={{ flex:1 }} />
+                  <PrimaryButton small title="Save" onPress={async () => { try { await updateTaskClass(taskEditId, { name: taskEditName, color: taskEditColor }); refreshTaskClasses(); } catch(e){ setTaskError(e.message); } setTaskEditId(null); setTaskEditName(''); setTaskEditColor(null); }} />
+                  <PrimaryButton small title="Cancel" onPress={() => { setTaskEditId(null); setTaskEditName(''); setTaskEditColor(null); }} />
+                </View>
+                <View style={{ flexWrap:'wrap', flexDirection:'row' }}>
+                  {colorPalette.map((c,i) => (
+                    <TouchableOpacity key={`taskEdit-${i}-${c}`} onPress={()=>setTaskEditColor(c)} style={{ width:'8.33%', aspectRatio:1, padding:2 }}>
+                      <View style={{ flex:1, borderRadius:6, backgroundColor:c, borderWidth: taskEditColor===c ? 3 : 1, borderColor: taskEditColor===c ? palette.text : palette.border }} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+            {taskError && <Text style={{ color: palette.danger, marginTop: spacing(2) }}>{taskError}</Text>}
+            <View style={{ marginTop: spacing(2) }}>
+              {taskClasses.map((item, idx) => (
+                <View key={item.task_class_id} style={{ flexDirection:'row', alignItems:'center', paddingVertical: spacing(2), gap: spacing(2), borderTopWidth: idx===0 ? 0 : 1, borderColor: palette.border }}>
+                  <View style={{ width:14, height:14, borderRadius:4, backgroundColor: item.color || palette.primary }} />
+                  <Text style={{ flex:1, fontSize:14, color: palette.text }}>{item.name}</Text>
+                  <PrimaryButton small title="Edit" onPress={() => { setTaskEditId(item.task_class_id); setTaskEditName(item.name); setTaskEditColor(item.color || colorPalette[0]); }} />
+                  <PrimaryButton small title="Del" onPress={async () => { try { await deleteTaskClass(item.task_class_id); refreshTaskClasses(); } catch(e){ setTaskError(e.message); } }} />
+                </View>
+              ))}
+              {!taskClasses.length && <Text style={{ fontSize:12, color: palette.textLight }}>No task classes yet.</Text>}
             </View>
           </Card>
         )}

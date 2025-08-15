@@ -95,6 +95,31 @@ export const migrations = [
       )`,
       `CREATE INDEX IF NOT EXISTS idx_task_snoozed_until ON Task(snoozed_until)`
     ]
+  },
+  {
+    version: 9,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS TaskClass (\n        task_class_id INTEGER PRIMARY KEY AUTOINCREMENT,\n        name TEXT NOT NULL UNIQUE,\n        color TEXT DEFAULT '#607D8B'\n      )`,
+      `ALTER TABLE Task ADD COLUMN priority INTEGER NOT NULL DEFAULT 3`,
+      `ALTER TABLE Task ADD COLUMN task_class_id INTEGER REFERENCES TaskClass(task_class_id)` ,
+      `CREATE INDEX IF NOT EXISTS idx_task_priority ON Task(priority)` ,
+      `CREATE INDEX IF NOT EXISTS idx_task_class ON Task(task_class_id)`
+    ]
+  },
+  {
+    version: 10,
+    statements: [
+      `ALTER TABLE RecurringTemplate ADD COLUMN priority INTEGER NOT NULL DEFAULT 3`,
+      `ALTER TABLE RecurringTemplate ADD COLUMN task_class_id INTEGER REFERENCES TaskClass(task_class_id)`
+    ]
+  },
+  {
+    version: 11,
+    statements: [
+      `ALTER TABLE Task ADD COLUMN start_date TEXT`,
+      `ALTER TABLE Task ADD COLUMN start_time TEXT`,
+      `ALTER TABLE Task ADD COLUMN due_time TEXT`
+    ]
   }
 ];
 
