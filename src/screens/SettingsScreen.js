@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+// Removed FlatList import to avoid nested VirtualizedList
 import { getActionClasses, createActionClass, updateActionClass, deleteActionClass, setPreference, getPreference } from '../services/Database';
 import { useTheme, useThemeMode } from '../constants/theme';
 import Card from '../components/ui/Card';
@@ -122,20 +123,18 @@ const SettingsScreen = ({ navigation }) => {
               </View>
             )}
             {error && <Text style={{ color: palette.danger, marginTop: spacing(2) }}>{error}</Text>}
-            <FlatList
-              style={{ marginTop: spacing(2) }}
-              data={classes}
-              keyExtractor={(item) => item.action_class_id.toString()}
-              ItemSeparatorComponent={() => <View style={{ height:1, backgroundColor: palette.border }} />}
-              renderItem={({ item }) => (
-                <View style={{ flexDirection:'row', alignItems:'center', paddingVertical: spacing(2), gap: spacing(2) }}>
+            {/* Replaced FlatList with manual map to avoid nesting VirtualizedList inside ScrollView */}
+            <View style={{ marginTop: spacing(2) }}>
+              {classes.map((item, idx) => (
+                <View key={item.action_class_id} style={{ flexDirection:'row', alignItems:'center', paddingVertical: spacing(2), gap: spacing(2), borderTopWidth: idx===0 ? 0 : 1, borderColor: palette.border }}>
                   <View style={{ width:14, height:14, borderRadius:4, backgroundColor: item.color || palette.primary }} />
                   <Text style={{ flex:1, fontSize:14, color: palette.text }}>{item.name}</Text>
                   <PrimaryButton small title="Edit" onPress={() => startEdit(item)} />
                   <PrimaryButton small title="Del" onPress={() => handleDelete(item.action_class_id)} />
                 </View>
-              )}
-            />
+              ))}
+              {!classes.length && <Text style={{ fontSize:12, color: palette.textLight }}>No classes yet.</Text>}
+            </View>
           </Card>
         )}
       </ScrollView>

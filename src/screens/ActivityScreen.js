@@ -181,7 +181,7 @@ const ActivityScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={{ flex:1, backgroundColor: palette.background }} edges={['top']}> 
-      <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding: spacing(4), paddingBottom: spacing(14) }}>
+      <View style={{ flex:1, padding: spacing(4), paddingBottom: spacing(14) }}>
         <View style={{ marginBottom: spacing(4), flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
           <Text style={{ ...typography.h1, color: palette.text }}>Activity</Text>
           <TouchableOpacity onPress={openAddModal} style={{ paddingHorizontal: spacing(2), paddingVertical: spacing(1) }}>
@@ -200,28 +200,30 @@ const ActivityScreen = ({ navigation }) => {
             </TouchableOpacity>
           </Animated.View>
         </View>
-        {/* Timeline Card */}
-        <View style={{ marginTop: spacing(6) }}>
+        {/* Timeline (only scrollable area) */}
+        <View style={{ flex:1, marginTop: spacing(6) }}>
           <Text style={{ fontSize:16, fontWeight:'600', color: palette.text, marginBottom: spacing(2) }}>Today's Timeline</Text>
           {loading ? <Text style={{ fontSize:12, color: palette.textLight }}>Loading...</Text> : (
-            <View style={{ borderWidth:1, borderColor: palette.border, borderRadius:12, overflow:'hidden' }}>
-              {activities.map((item, idx) => {
-                const duration = item.end_time ? Math.round((new Date(item.end_time) - new Date(item.start_time))/60000) : Math.round((Date.now() - new Date(item.start_time))/60000);
-                return (
-                  <TouchableOpacity key={item.activity_id} onPress={() => openEditModal(item)} style={{ paddingVertical: spacing(2), paddingHorizontal: spacing(3), flexDirection:'row', alignItems:'center', backgroundColor: idx %2 ? palette.surface : palette.background }}>
-                    <View style={{ width:10, height:10, borderRadius:5, backgroundColor: item.color || palette.primary, marginRight: spacing(2) }} />
-                    <View style={{ flex:1 }}>
-                      <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }}>{item.action_class_name}</Text>
-                      <Text style={{ fontSize:12, color: palette.textLight }}>{new Date(item.start_time).toLocaleTimeString()} {item.end_time ? ' - ' + new Date(item.end_time).toLocaleTimeString() : ' (running)'}</Text>
-                    </View>
-                    <Text style={{ fontSize:12, color: palette.textLight }}>{duration}m</Text>
-                  </TouchableOpacity>
-                );
-              })}
+            <View style={{ flex:1, borderWidth:1, borderColor: palette.border, borderRadius:12, overflow:'hidden' }}>
+              <ScrollView>
+                {activities.map((item, idx) => {
+                  const duration = item.end_time ? Math.round((new Date(item.end_time) - new Date(item.start_time))/60000) : Math.round((Date.now() - new Date(item.start_time))/60000);
+                  return (
+                    <TouchableOpacity key={item.activity_id} onPress={() => openEditModal(item)} style={{ paddingVertical: spacing(2), paddingHorizontal: spacing(3), flexDirection:'row', alignItems:'center', backgroundColor: idx %2 ? palette.surface : palette.background }}>
+                      <View style={{ width:10, height:10, borderRadius:5, backgroundColor: item.color || palette.primary, marginRight: spacing(2) }} />
+                      <View style={{ flex:1 }}>
+                        <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }}>{item.action_class_name}</Text>
+                        <Text style={{ fontSize:12, color: palette.textLight }}>{new Date(item.start_time).toLocaleTimeString()} {item.end_time ? ' - ' + new Date(item.end_time).toLocaleTimeString() : ' (running)'}</Text>
+                      </View>
+                      <Text style={{ fontSize:12, color: palette.textLight }}>{duration}m</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
           )}
         </View>
-      </ScrollView>
+      </View>
       {toast && (
         <View style={{ position:'absolute', bottom: 40, left: 20, right: 20, backgroundColor: palette.surface, padding: spacing(2), borderRadius:8, shadowColor:'#000', shadowOpacity:0.2, shadowRadius:6, elevation:4 }}>
           <Text style={{ textAlign:'center', fontSize:12, color: palette.text }}>{toast}</Text>
@@ -278,6 +280,7 @@ const ActivityScreen = ({ navigation }) => {
                 <TouchableOpacity onPress={() => setModalVisible(false)} style={{ paddingVertical:10, paddingHorizontal:14 }}>
                   <Text style={{ color: palette.textLight, fontSize:13 }}>Cancel</Text>
                 </TouchableOpacity>
+                <View style={{ width: spacing(3) }} />
                 <TouchableOpacity onPress={async () => { try {
                   if (!formClassId) throw new Error('Class');
                   const buildISO = (hhmm) => { const [h,m]=hhmm.split(':').map(n=>parseInt(n,10)); if(isNaN(h)||isNaN(m)) return null; const d=new Date(); d.setHours(h); d.setMinutes(m); d.setSeconds(0); d.setMilliseconds(0); return d.toISOString(); };
