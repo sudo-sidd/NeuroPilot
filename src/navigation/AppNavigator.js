@@ -11,6 +11,7 @@ import ActivityScreen from '../screens/ActivityScreen';
 import DatabaseScreen from '../screens/DatabaseScreen';
 import FAB from '../components/ui/FAB';
 import { useTheme } from '../constants/theme';
+import { Text } from 'react-native';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -38,14 +39,12 @@ const MainTabs = () => {
 
 const AppNavigator = () => {
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Main" component={MainTabs} />
-        {/* existing stack screens remain for deep links / non-tab navigations */}
-        <Stack.Screen name="Activity" component={ActivityScreen} />
-        <Stack.Screen name="Database" component={DatabaseScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Main" component={MainTabs} />
+      {/* existing stack screens remain for deep links / non-tab navigations */}
+      <Stack.Screen name="Activity" component={ActivityScreen} />
+      <Stack.Screen name="Database" component={DatabaseScreen} />
+    </Stack.Navigator>
   );
 };
 

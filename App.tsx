@@ -15,9 +15,9 @@ const Root = () => {
       <NavigationContainer ref={navRef} onStateChange={() => setCurrent(navRef.getCurrentRoute()?.name || '')}>
         <AppNavigator />
         <FAB
-          icon={current.includes('Activity') ? (current === 'ActivityTab' ? '■' : '▶') : current.includes('Tasks') ? '＋' : current.includes('Journal') ? '✎' : current.includes('Reports') ? '⇪' : '＋'}
+          icon={current.includes('Activity') ? '■' : current.includes('Tasks') ? '＋' : current.includes('Journal') ? '✎' : current.includes('Reports') ? '⇪' : '＋'}
           label="contextual action"
-          onPress={() => { /* placeholder actions in later steps */ }}
+          onPress={() => { /* TODO step 3+ actions */ }}
         />
       </NavigationContainer>
     </ThemeProvider>
