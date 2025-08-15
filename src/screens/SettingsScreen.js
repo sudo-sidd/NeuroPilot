@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, Button, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, StyleSheet } from 'react-native';
 import { getActionClasses, createActionClass, updateActionClass, deleteActionClass } from '../services/Database';
+import { palette, spacing, typography } from '../constants/theme';
+import Card from '../components/ui/Card';
+import SectionHeader from '../components/ui/SectionHeader';
+import PrimaryButton from '../components/ui/PrimaryButton';
+import Input from '../components/ui/Input';
 
 const randomColor = () => '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
 
@@ -44,55 +49,64 @@ const SettingsScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Action Classes</Text>
-      {error && <Text style={styles.error}>{error}</Text>}
-      <View style={styles.row}>
-        <TextInput
-          style={styles.input}
-          placeholder="New class name"
-          value={name}
-          onChangeText={setName}
-        />
-        <Button title="Add" onPress={handleAdd} />
-      </View>
-      {editId && (
-        <View style={styles.row}>
-          <TextInput
-            style={styles.input}
-            placeholder="Edit name"
-            value={editName}
-            onChangeText={setEditName}
-          />
-          <Button title="Save" onPress={handleSaveEdit} />
-          <Button title="Cancel" onPress={() => { setEditId(null); setEditName(''); }} />
-        </View>
-      )}
+    <View style={styles.screen}> 
       <FlatList
-        data={classes}
-        keyExtractor={(item) => item.action_class_id.toString()}
-        renderItem={({ item }) => (
-          <View style={styles.item}>
-            <View style={[styles.color, { backgroundColor: item.color || '#2196F3' }]} />
-            <Text style={styles.itemText}>{item.name}</Text>
-            <Button title="Edit" onPress={() => startEdit(item)} />
-            <Button title="Delete" onPress={() => handleDelete(item.action_class_id)} />
-          </View>
-        )}
+        contentContainerStyle={styles.container}
+        data={[]} // dummy to enable header/footer layout
+        ListHeaderComponent={
+          <>
+            <Text style={styles.header}>Settings</Text>
+            <Card style={styles.section}>
+              <SectionHeader title="Add Action Class" />
+              <View style={styles.row}>
+                <Input placeholder="New class name" value={name} onChangeText={setName} style={styles.flex} />
+                <PrimaryButton small title="Add" onPress={handleAdd} />
+              </View>
+              {editId && (
+                <View style={styles.row}>
+                  <Input placeholder="Edit name" value={editName} onChangeText={setEditName} style={styles.flex} />
+                  <PrimaryButton small title="Save" onPress={handleSaveEdit} />
+                  <PrimaryButton small title="Cancel" onPress={() => { setEditId(null); setEditName(''); }} />
+                </View>
+              )}
+              {error && <Text style={styles.error}>{error}</Text>}
+            </Card>
+            <Card style={styles.section}>
+              <SectionHeader title="Action Classes" />
+              <FlatList
+                data={classes}
+                keyExtractor={(item) => item.action_class_id.toString()}
+                ItemSeparatorComponent={() => <View style={styles.sep} />}
+                renderItem={({ item }) => (
+                  <View style={styles.item}>
+                    <View style={[styles.color, { backgroundColor: item.color || palette.primary }]} />
+                    <Text style={styles.itemText}>{item.name}</Text>
+                    <PrimaryButton small title="Edit" onPress={() => startEdit(item)} />
+                    <PrimaryButton small title="Del" onPress={() => handleDelete(item.action_class_id)} />
+                  </View>
+                )}
+              />
+            </Card>
+          </>
+        }
+        renderItem={null}
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#fff' },
-  header: { fontSize: 20, fontWeight: 'bold', marginBottom: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  input: { flex: 1, borderWidth: 1, borderColor: '#ccc', marginRight: 8, paddingHorizontal: 8, height: 40 },
-  item: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderColor: '#eee', gap: 8 },
-  itemText: { flex: 1 },
-  color: { width: 16, height: 16, borderRadius: 4 },
-  error: { color: 'red', marginBottom: 8 }
+  screen: { flex: 1, backgroundColor: palette.background },
+  container: { padding: spacing(4), paddingBottom: spacing(10) },
+  header: { ...typography.h1, color: palette.text },
+  section: { marginTop: spacing(4) },
+  row: { flexDirection: 'row', alignItems: 'center', marginTop: spacing(2), marginBottom: spacing(3) },
+  flex: { flex: 1 },
+  error: { color: palette.danger, marginTop: spacing(2) },
+  sep: { height: 1, backgroundColor: palette.border },
+  item: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing(2), gap: spacing(2) },
+  itemText: { flex: 1, fontSize: 14, color: palette.text },
+  color: { width: 14, height: 14, borderRadius: 4 },
 });
 
 export default SettingsScreen;

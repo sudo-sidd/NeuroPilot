@@ -23,6 +23,9 @@ The format is based on Keep a Changelog and this project adheres (pre-1.0) to se
 - Phase 9: migration 7 (Task.reminder_notification_id), task create/update now schedules/cancels reminders (basic timestamp trigger), added missing `deleteTask` helper (with reminder cancellation) to satisfy existing tests/UI.
 - Phase 9: Added recurrence generation tests (`Recurring.test.js`).
 - Phase 9: Added weekly report aggregation tests (`Report.test.js`) and test helper `createActivityManual`.
+- Phase 10: UI refresh introducing design system (`theme.js`), reusable components (Card, SectionHeader, PrimaryButton, Input, Chip) and redesigned Home, Tasks, Settings, DailyForm, Reports screens.
+- Phase 10: Added bottom tab navigation (Tasks, Action, Journal) replacing prior stack-only entry for core flows.
+- Phase 10: Added dependency `@react-navigation/bottom-tabs` for bottom navigation implementation.
 
 ### Planned
 

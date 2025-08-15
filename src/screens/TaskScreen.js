@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, Button, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { getTasks, createTask, updateTask, deleteTask } from '../services/Database';
+import { palette, spacing, typography } from '../constants/theme';
+import Card from '../components/ui/Card';
+import SectionHeader from '../components/ui/SectionHeader';
+import PrimaryButton from '../components/ui/PrimaryButton';
+import Input from '../components/ui/Input';
 
 const TaskScreen = () => {
   const [tasks, setTasks] = useState([]);
@@ -21,37 +26,48 @@ const TaskScreen = () => {
   const remove = async (task) => { await deleteTask(task.task_id); refresh(); };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       <Text style={styles.header}>Tasks</Text>
-      <View style={styles.row}>
-        <TextInput style={styles.input} placeholder="New task" value={name} onChangeText={setName} />
-        <Button title="Add" onPress={add} />
-      </View>
-      <FlatList
-        data={tasks}
-        keyExtractor={(item) => item.task_id.toString()}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.item} onPress={() => toggle(item)} onLongPress={() => remove(item)}>
-            <Text style={[styles.text, item.completed ? styles.completed : null]}>• {item.name}</Text>
-            {item.due_date && <Text style={styles.due}>{item.due_date}</Text>}
-          </TouchableOpacity>
-        )}
-      />
-      <Text style={styles.hint}>Tap to toggle, long-press to delete.</Text>
-    </View>
+      <Card style={styles.section}>
+        <SectionHeader title="Create" />
+        <View style={styles.row}> 
+          <Input placeholder="New task" value={name} onChangeText={setName} style={styles.flex} />
+          <PrimaryButton small title="Add" onPress={add} />
+        </View>
+      </Card>
+      <Card style={styles.section}>
+        <SectionHeader title="All Tasks" />
+        <FlatList
+          data={tasks}
+          keyExtractor={(item) => item.task_id.toString()}
+          scrollEnabled={false}
+          ItemSeparatorComponent={() => <View style={styles.sep} />}
+          renderItem={({ item }) => (
+            <TouchableOpacity style={styles.item} onPress={() => toggle(item)} onLongPress={() => remove(item)}>
+              <Text style={[styles.text, item.completed && styles.completed]}>• {item.name}</Text>
+              {item.due_date && <Text style={styles.due}>{item.due_date}</Text>}
+            </TouchableOpacity>
+          )}
+        />
+        <Text style={styles.hint}>Tap to toggle, long-press to delete.</Text>
+      </Card>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#fff' },
-  header: { fontSize: 20, fontWeight: 'bold', marginBottom: 12 },
-  row: { flexDirection: 'row', marginBottom: 12 },
-  input: { flex: 1, borderWidth: 1, borderColor: '#ccc', marginRight: 8, paddingHorizontal: 8, height: 40 },
-  item: { paddingVertical: 8, borderBottomWidth: 1, borderColor: '#eee' },
-  text: { fontSize: 14 },
-  completed: { textDecorationLine: 'line-through', color: '#777' },
-  due: { fontSize: 10, color: '#555' },
-  hint: { fontSize: 10, marginTop: 12, color: '#666' }
+  screen: { flex: 1, backgroundColor: palette.background },
+  container: { padding: spacing(4), paddingBottom: spacing(12) },
+  header: { ...typography.h1, color: palette.text },
+  section: { marginTop: spacing(4) },
+  row: { flexDirection: 'row', alignItems: 'center', marginTop: spacing(2), marginBottom: spacing(3) },
+  flex: { flex: 1 },
+  sep: { height: 1, backgroundColor: palette.border },
+  item: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing(2) },
+  text: { fontSize: 14, color: palette.text },
+  completed: { textDecorationLine: 'line-through', color: palette.textLight },
+  due: { fontSize: 11, color: palette.textLight },
+  hint: { fontSize: 11, color: palette.textLight, marginTop: spacing(3) }
 });
 
 export default TaskScreen;

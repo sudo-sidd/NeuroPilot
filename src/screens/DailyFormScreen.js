@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { getDailyForm, upsertDailyForm } from '../services/Database';
+import { palette, spacing, typography } from '../constants/theme';
+import Card from '../components/ui/Card';
+import SectionHeader from '../components/ui/SectionHeader';
+import PrimaryButton from '../components/ui/PrimaryButton';
+import Input from '../components/ui/Input';
 
 const isoToday = () => new Date().toISOString().slice(0,10);
 
@@ -37,31 +42,38 @@ const DailyFormScreen = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       <Text style={styles.header}>Daily Form</Text>
-      <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
-      <TextInput style={styles.input} value={date} onChangeText={setDate} />
-      <Text style={styles.label}>Mood (0-10)</Text>
-      <TextInput style={styles.input} value={mood} onChangeText={setMood} keyboardType="number-pad" />
-      <Text style={styles.label}>Thoughts</Text>
-      <TextInput style={[styles.input, styles.multi]} value={thoughts} onChangeText={setThoughts} multiline />
-      <Text style={styles.label}>Highlights</Text>
-      <TextInput style={[styles.input, styles.multi]} value={highlights} onChangeText={setHighlights} multiline />
-      <Text style={styles.label}>Gratitude</Text>
-      <TextInput style={[styles.input, styles.multi]} value={gratitude} onChangeText={setGratitude} multiline />
-      <Button title="Save" onPress={save} />
-      {status ? <Text style={styles.status}>{status}</Text> : null}
+      <Card style={styles.section}>
+        <SectionHeader title="Entry" />
+        <Text style={styles.label}>Date</Text>
+        <Input value={date} onChangeText={setDate} />
+        <Text style={styles.label}>Mood (0-10)</Text>
+        <Input value={mood} onChangeText={setMood} keyboardType="number-pad" />
+        <Text style={styles.label}>Thoughts</Text>
+        <Input style={styles.multi} value={thoughts} onChangeText={setThoughts} multiline />
+        <Text style={styles.label}>Highlights</Text>
+        <Input style={styles.multi} value={highlights} onChangeText={setHighlights} multiline />
+        <Text style={styles.label}>Gratitude</Text>
+        <Input style={styles.multi} value={gratitude} onChangeText={setGratitude} multiline />
+        <View style={styles.saveRow}>
+          <PrimaryButton title="Save" onPress={save} />
+          {status ? <Text style={styles.status}>{status}</Text> : null}
+        </View>
+      </Card>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: '#fff' },
-  header: { fontSize: 20, fontWeight: 'bold', marginBottom: 12 },
-  label: { marginTop: 12, fontWeight: '600' },
-  input: { borderWidth: 1, borderColor: '#ccc', padding: 8, borderRadius: 4 },
-  multi: { minHeight: 60, textAlignVertical: 'top' },
-  status: { marginTop: 12, fontStyle: 'italic' }
+  screen: { flex: 1, backgroundColor: palette.background },
+  container: { padding: spacing(4), paddingBottom: spacing(10) },
+  header: { ...typography.h1, color: palette.text },
+  section: { marginTop: spacing(4) },
+  label: { marginTop: spacing(4), fontSize: 12, fontWeight: '600', color: palette.textLight },
+  multi: { minHeight: 80, textAlignVertical: 'top' },
+  saveRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginTop: spacing(5) },
+  status: { fontSize: 12, color: palette.textLight }
 });
 
 export default DailyFormScreen;

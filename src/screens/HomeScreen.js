@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button, FlatList, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { getActionClasses, getCurrentActivity, getTodaysActivities, startActivity, stopCurrentActivity, getTasks, createTask, updateTask } from '../services/Database';
+import { palette, spacing, typography } from '../constants/theme';
+import Card from '../components/ui/Card';
+import SectionHeader from '../components/ui/SectionHeader';
+import PrimaryButton from '../components/ui/PrimaryButton';
+import Input from '../components/ui/Input';
+import Chip from '../components/ui/Chip';
 
 const HomeScreen = ({ navigation }) => {
   const [actionClasses, setActionClasses] = useState([]);
@@ -57,77 +63,93 @@ const HomeScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Activity Tracker (Phase 1)</Text>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Button title="Reports" onPress={() => navigation.navigate('Reports')} />
-        <Button title="Daily Form" onPress={() => navigation.navigate('DailyForm')} />
-      </View>
-      {current ? (
-        <View style={styles.currentBox}>
-          <Text style={styles.currentText}>Running: {current.action_class_name}</Text>
-          <Button title="Stop" onPress={handleStop} />
+    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+      <View style={styles.topBar}>
+        <Text style={styles.appTitle}>NeuroPilot</Text>
+        <View style={styles.topActions}>
+          <PrimaryButton small title="Reports" onPress={() => navigation.navigate('Reports')} />
+          <PrimaryButton small title="Daily" onPress={() => navigation.navigate('DailyForm')} />
         </View>
-      ) : (
-        <Text style={styles.idle}>No active activity</Text>
-      )}
-      <Text style={styles.subHeader}>Start New:</Text>
-      <View style={styles.row}>
-        {actionClasses.map(cls => (
-          <View key={cls.action_class_id} style={styles.classBtn}>
-            <Button color={cls.color || '#2196F3'} title={cls.name} onPress={() => handleStart(cls)} />
+      </View>
+
+      <Card style={styles.section}>
+        <SectionHeader title={current ? 'Current Activity' : 'Start an Activity'} />
+        {current ? (
+          <View style={styles.currentRow}>
+            <Text style={styles.currentText}>{current.action_class_name}</Text>
+            <PrimaryButton small title="Stop" onPress={handleStop} />
           </View>
-        ))}
-      </View>
-      <Text style={styles.subHeader}>Today</Text>
-      {loading ? <Text>Loading...</Text> : (
-        <FlatList
-          data={activities}
-          keyExtractor={(item) => item.activity_id.toString()}
-          renderItem={({ item }) => (
-            <View style={styles.item}>
-              <Text>{item.action_class_name}</Text>
-              <Text style={styles.itemTime}>{new Date(item.start_time).toLocaleTimeString()} {item.end_time ? ' - ' + new Date(item.end_time).toLocaleTimeString() : '(running)'}</Text>
-            </View>
-          )}
-        />
-      )}
-      <Text style={styles.subHeader}>Tasks</Text>
-      <View style={styles.taskRow}>
-        <TextInput style={styles.taskInput} placeholder="New task" value={taskName} onChangeText={setTaskName} />
-        <Button title="Add" onPress={addTask} />
-      </View>
-      <FlatList
-        data={tasks}
-        keyExtractor={(item) => item.task_id.toString()}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.taskItem} onPress={() => toggleTask(item)}>
-            <Text style={[styles.taskText, item.completed ? styles.taskCompleted : null]}>• {item.name}</Text>
-            {item.due_date && <Text style={styles.dueDate}>{item.due_date}</Text>}
-          </TouchableOpacity>
+        ) : (
+          <View style={styles.classWrap}>
+            {actionClasses.map(cls => (
+              <Chip key={cls.action_class_id} label={cls.name} color={cls.color || palette.primary} onPress={() => handleStart(cls)} />
+            ))}
+          </View>
         )}
-      />
-    </View>
+      </Card>
+
+      <Card style={styles.section}>
+        <SectionHeader title="Today's Log" />
+        {loading ? <Text style={styles.muted}>Loading...</Text> : (
+          <FlatList
+            data={activities}
+            keyExtractor={(item) => item.activity_id.toString()}
+            scrollEnabled={false}
+            ItemSeparatorComponent={() => <View style={styles.sep} />}
+            renderItem={({ item }) => (
+              <View style={styles.activityItem}>
+                <Text style={styles.activityName}>{item.action_class_name}</Text>
+                <Text style={styles.activityTime}>{new Date(item.start_time).toLocaleTimeString()} {item.end_time ? ' - ' + new Date(item.end_time).toLocaleTimeString() : '(running)'}</Text>
+              </View>
+            )}
+          />
+        )}
+      </Card>
+
+      <Card style={styles.section}>
+        <SectionHeader title="Tasks" />
+        <View style={styles.taskAddRow}>
+          <Input placeholder="New task" value={taskName} onChangeText={setTaskName} style={styles.flex} />
+          <PrimaryButton small title="Add" onPress={addTask} />
+        </View>
+        <FlatList
+          data={tasks}
+            keyExtractor={(item) => item.task_id.toString()}
+            scrollEnabled={false}
+            ItemSeparatorComponent={() => <View style={styles.sep} />}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.taskRow} onPress={() => toggleTask(item)}>
+                <Text style={[styles.taskText, item.completed && styles.completed]}>• {item.name}</Text>
+                {item.due_date && <Text style={styles.dueDate}>{item.due_date}</Text>}
+              </TouchableOpacity>
+            )}
+        />
+      </Card>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#fff' },
-  header: { fontSize: 20, fontWeight: 'bold', marginBottom: 12 },
-  subHeader: { marginTop: 16, fontSize: 16, fontWeight: '600' },
-  row: { flexDirection: 'row', flexWrap: 'wrap' },
-  classBtn: { marginRight: 8, marginTop: 8 },
-  currentBox: { padding: 12, backgroundColor: '#eef', borderRadius: 6 },
-  currentText: { fontSize: 16, marginBottom: 4 },
-  idle: { fontStyle: 'italic' },
-  item: { paddingVertical: 8, borderBottomWidth: 1, borderColor: '#eee' },
-  itemTime: { fontSize: 12, color: '#555' },
-  taskRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  taskInput: { flex: 1, borderWidth: 1, borderColor: '#ccc', marginRight: 8, paddingHorizontal: 8, height: 40 },
-  taskItem: { paddingVertical: 6, borderBottomWidth: 1, borderColor: '#eee' },
-  taskText: { fontSize: 14 },
-  taskCompleted: { textDecorationLine: 'line-through', color: '#777' },
-  dueDate: { fontSize: 10, color: '#555' }
+  screen: { flex: 1, backgroundColor: palette.background },
+  container: { padding: spacing(4), paddingBottom: spacing(12) },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(4) },
+  appTitle: { ...typography.h1, color: palette.text },
+  topActions: { flexDirection: 'row', gap: spacing(2) },
+  section: { marginTop: spacing(4) },
+  classWrap: { flexDirection: 'row', flexWrap: 'wrap' },
+  currentRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  currentText: { ...typography.h2, color: palette.primary },
+  muted: { color: palette.textLight, fontSize: 12 },
+  sep: { height: 1, backgroundColor: palette.border },
+  activityItem: { paddingVertical: spacing(2) },
+  activityName: { fontWeight: '600', color: palette.text },
+  activityTime: { fontSize: 12, color: palette.textLight, marginTop: 2 },
+  taskAddRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing(3) },
+  taskRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing(2) },
+  taskText: { fontSize: 14, color: palette.text },
+  completed: { textDecorationLine: 'line-through', color: palette.textLight },
+  dueDate: { fontSize: 11, color: palette.textLight },
+  flex: { flex: 1 }
 });
 
 export default HomeScreen;
