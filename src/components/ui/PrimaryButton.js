@@ -1,17 +1,20 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { palette, radii, spacing, typography } from '../../constants/theme';
+import { useTheme } from '../../constants/theme';
 
-const PrimaryButton = ({ title, onPress, small=false }) => (
-  <TouchableOpacity onPress={onPress} style={[styles.btn, small && styles.small]} activeOpacity={0.85}>
-    <Text style={[styles.txt, small && styles.smallTxt]}>{title}</Text>
-  </TouchableOpacity>
-);
+const PrimaryButton = ({ title, onPress, small=false }) => {
+  const { palette, spacing, radii } = useTheme();
+  return (
+    <TouchableOpacity onPress={onPress} style={[styles.btn, small && styles.small, { backgroundColor: palette.primary, paddingVertical: spacing(3), paddingHorizontal: spacing(5), borderRadius: radii.sm }]} activeOpacity={0.85}>
+      <Text style={[styles.txt, small && styles.smallTxt]}>{title}</Text>
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
-  btn: { backgroundColor: palette.primary, paddingVertical: spacing(3), paddingHorizontal: spacing(5), borderRadius: radii.sm },
+  btn: {},
   txt: { color: '#fff', fontWeight: '600', fontSize: 14 },
-  small: { paddingVertical: spacing(2), paddingHorizontal: spacing(3) },
+  small: { },
   smallTxt: { fontSize: 12 }
 });
 

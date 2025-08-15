@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { getDailyForm, upsertDailyForm } from '../services/Database';
-import { palette, spacing, typography } from '../constants/theme';
+import { useTheme } from '../constants/theme';
 import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import PrimaryButton from '../components/ui/PrimaryButton';
@@ -12,6 +12,7 @@ import OptionsDrawer from '../components/ui/OptionsDrawer';
 const isoToday = () => new Date().toISOString().slice(0,10);
 
 const DailyFormScreen = ({ navigation }) => {
+  const { palette, spacing, typography } = useTheme();
   const [date, setDate] = useState(isoToday());
   const [mood, setMood] = useState('');
   const [thoughts, setThoughts] = useState('');
@@ -47,28 +48,28 @@ const DailyFormScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
-        <View style={styles.topBar}>
-          <Text style={styles.header}>Daily Form</Text>
-          <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22 }}>☰</Text></TouchableOpacity>
+    <SafeAreaView style={{ flex:1, backgroundColor: palette.background }} edges={['top']}>
+      <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding: spacing(4), paddingBottom: spacing(10) }}>
+        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
+          <Text style={{ ...typography.h1, color: palette.text }}>Daily Form</Text>
+          <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22, color: palette.text }}>☰</Text></TouchableOpacity>
         </View>
-        <Card style={styles.section}>
-          <SectionHeader title="Entry" />
-          <Text style={styles.label}>Date</Text>
-          <Input value={date} onChangeText={setDate} />
-          <Text style={styles.label}>Mood (0-10)</Text>
-          <Input value={mood} onChangeText={setMood} keyboardType="number-pad" />
-          <Text style={styles.label}>Thoughts</Text>
-          <Input style={styles.multi} value={thoughts} onChangeText={setThoughts} multiline />
-          <Text style={styles.label}>Highlights</Text>
-          <Input style={styles.multi} value={highlights} onChangeText={setHighlights} multiline />
-          <Text style={styles.label}>Gratitude</Text>
-          <Input style={styles.multi} value={gratitude} onChangeText={setGratitude} multiline />
-          <View style={styles.saveRow}>
-            <PrimaryButton title="Save" onPress={save} />
-            {status ? <Text style={styles.status}>{status}</Text> : null}
-          </View>
+        <Card style={{ marginTop: spacing(4) }}>
+            <SectionHeader title="Entry" />
+            <Text style={{ marginTop: spacing(4), fontSize:12, fontWeight:'600', color: palette.textLight }}>Date</Text>
+            <Input value={date} onChangeText={setDate} />
+            <Text style={{ marginTop: spacing(4), fontSize:12, fontWeight:'600', color: palette.textLight }}>Mood (0-10)</Text>
+            <Input value={mood} onChangeText={setMood} keyboardType="number-pad" />
+            <Text style={{ marginTop: spacing(4), fontSize:12, fontWeight:'600', color: palette.textLight }}>Thoughts</Text>
+            <Input style={{ minHeight:80, textAlignVertical:'top' }} value={thoughts} onChangeText={setThoughts} multiline />
+            <Text style={{ marginTop: spacing(4), fontSize:12, fontWeight:'600', color: palette.textLight }}>Highlights</Text>
+            <Input style={{ minHeight:80, textAlignVertical:'top' }} value={highlights} onChangeText={setHighlights} multiline />
+            <Text style={{ marginTop: spacing(4), fontSize:12, fontWeight:'600', color: palette.textLight }}>Gratitude</Text>
+            <Input style={{ minHeight:80, textAlignVertical:'top' }} value={gratitude} onChangeText={setGratitude} multiline />
+            <View style={{ flexDirection:'row', alignItems:'center', gap: spacing(3), marginTop: spacing(5) }}>
+              <PrimaryButton title="Save" onPress={save} />
+              {status ? <Text style={{ fontSize:12, color: palette.textLight }}>{status}</Text> : null}
+            </View>
         </Card>
       </ScrollView>
       <OptionsDrawer
@@ -84,17 +85,6 @@ const DailyFormScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  safe: { flex:1, backgroundColor: palette.background },
-  screen: { flex: 1, backgroundColor: palette.background },
-  container: { padding: spacing(4), paddingBottom: spacing(10) },
-  header: { ...typography.h1, color: palette.text },
-  section: { marginTop: spacing(4) },
-  label: { marginTop: spacing(4), fontSize: 12, fontWeight: '600', color: palette.textLight },
-  multi: { minHeight: 80, textAlignVertical: 'top' },
-  saveRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3), marginTop: spacing(5) },
-  status: { fontSize: 12, color: palette.textLight },
-  topBar: { flexDirection:'row', justifyContent:'space-between', alignItems:'center' }
-});
+const styles = StyleSheet.create({ safe:{}, screen:{}, container:{}, header:{}, section:{}, label:{}, multi:{}, saveRow:{}, status:{}, topBar:{} });
 
 export default DailyFormScreen;

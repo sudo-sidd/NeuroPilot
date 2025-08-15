@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList } from 'react-native';
 import { getWeeklyReport } from '../services/Database';
-import { palette, spacing, typography } from '../constants/theme';
+import { useTheme } from '../constants/theme';
 import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import PrimaryButton from '../components/ui/PrimaryButton';
@@ -13,6 +13,7 @@ const isoToday = () => new Date().toISOString().slice(0,10);
 const mondayOfWeek = (iso) => { const d = new Date(iso + 'T00:00:00Z'); const day = d.getUTCDay(); const diff = (day === 0 ? -6 : 1 - day); d.setUTCDate(d.getUTCDate() + diff); return d.toISOString().slice(0,10); };
 
 const ReportsScreen = ({ navigation }) => {
+  const { palette, typography, spacing } = useTheme();
   const [start, setStart] = useState(mondayOfWeek(isoToday()));
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -29,67 +30,67 @@ const ReportsScreen = ({ navigation }) => {
   useEffect(() => { load(); }, []);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
-        <View style={styles.topBar}>
-          <Text style={styles.header}>Reports</Text>
-          <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22 }}>☰</Text></TouchableOpacity>
+    <SafeAreaView style={{ flex:1, backgroundColor: palette.background }} edges={['top']}>
+      <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding: spacing(4), paddingBottom: spacing(10) }}>
+        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
+          <Text style={{ ...typography.h1, color: palette.text }}>Reports</Text>
+          <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22, color: palette.text }}>☰</Text></TouchableOpacity>
         </View>
-        <Text style={styles.header}>Weekly Report</Text>
-        <Card style={styles.section}>
+        <Text style={{ ...typography.h1, color: palette.text }}>Weekly Report</Text>
+        <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title="Controls" />
-          <Text style={styles.label}>Week Starting (Mon)</Text>
-          <View style={styles.row}>
-            <Input style={styles.flex} value={start} onChangeText={setStart} />
+          <Text style={{ marginTop: spacing(2), fontSize:12, fontWeight:'600', color: palette.textLight }}>Week Starting (Mon)</Text>
+          <View style={{ flexDirection:'row', alignItems:'center', gap: spacing(2), marginTop: spacing(2) }}>
+            <Input style={{ flex:1 }} value={start} onChangeText={setStart} />
             <PrimaryButton small title="Load" onPress={load} />
           </View>
-          {loading && <Text style={styles.muted}>Loading...</Text>}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {loading && <Text style={{ fontSize:12, color: palette.textLight, marginTop: spacing(2) }}>Loading...</Text>}
+          {error ? <Text style={{ color: palette.danger, marginTop: spacing(2) }}>{error}</Text> : null}
         </Card>
         {report && (
-          <Card style={styles.section}>
+          <Card style={{ marginTop: spacing(4) }}>
             <SectionHeader title="Summary" />
-            <Text style={styles.range}>Range: {report.range.start} → {report.range.end}</Text>
-            <Text style={styles.subTitle}>Activities</Text>
+            <Text style={{ marginTop: spacing(2), fontSize:12, color: palette.textLight }}>Range: {report.range.start} → {report.range.end}</Text>
+            <Text style={{ marginTop: spacing(4), fontSize:14, fontWeight:'600', color: palette.text }}>Activities</Text>
             <FlatList
               data={report.activities}
               keyExtractor={(item) => String(item.action_class_id)}
               scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={styles.sep} />}
+              ItemSeparatorComponent={() => <View style={{ height:1, backgroundColor: palette.border }} />}
               renderItem={({ item }) => (
-                <View style={styles.activityRow}>
-                  <View style={[styles.dot, { backgroundColor: item.color || palette.primary }]} />
-                  <Text style={styles.activityName}>{item.name}</Text>
-                  <Text style={styles.activityDuration}>{Math.round(item.total_duration_ms / 60000)}m</Text>
+                <View style={{ flexDirection:'row', alignItems:'center', paddingVertical: spacing(2) }}>
+                  <View style={{ width:10, height:10, borderRadius:5, marginRight: spacing(2), backgroundColor: item.color || palette.primary }} />
+                  <Text style={{ flex:1, fontSize:14, color: palette.text }}>{item.name}</Text>
+                  <Text style={{ fontSize:12, color: palette.textLight }}>{Math.round(item.total_duration_ms / 60000)}m</Text>
                 </View>
               )}
             />
-            <View style={styles.metricsRow}>
-              <View style={styles.metricBox}>
-                <Text style={styles.metricLabel}>Tasks</Text>
-                <Text style={styles.metricValue}>{report.tasks.completed}/{report.tasks.total}</Text>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', marginTop: spacing(4) }}>
+              <View style={{ flex:1, alignItems:'center' }}>
+                <Text style={{ fontSize:11, color: palette.textLight, textTransform:'uppercase' }}>Tasks</Text>
+                <Text style={{ fontSize:16, fontWeight:'600', color: palette.text, marginTop:2 }}>{report.tasks.completed}/{report.tasks.total}</Text>
               </View>
-              <View style={styles.metricBox}>
-                <Text style={styles.metricLabel}>Completion</Text>
-                <Text style={styles.metricValue}>{Math.round(report.tasks.completion_rate * 100)}%</Text>
+              <View style={{ flex:1, alignItems:'center' }}>
+                <Text style={{ fontSize:11, color: palette.textLight, textTransform:'uppercase' }}>Completion</Text>
+                <Text style={{ fontSize:16, fontWeight:'600', color: palette.text, marginTop:2 }}>{Math.round(report.tasks.completion_rate * 100)}%</Text>
               </View>
-              <View style={styles.metricBox}>
-                <Text style={styles.metricLabel}>Avg Mood</Text>
-                <Text style={styles.metricValue}>{report.mood.average != null ? Number(report.mood.average).toFixed(1) : 'N/A'}</Text>
+              <View style={{ flex:1, alignItems:'center' }}>
+                <Text style={{ fontSize:11, color: palette.textLight, textTransform:'uppercase' }}>Avg Mood</Text>
+                <Text style={{ fontSize:16, fontWeight:'600', color: palette.text, marginTop:2 }}>{report.mood.average != null ? Number(report.mood.average).toFixed(1) : 'N/A'}</Text>
               </View>
             </View>
           </Card>
         )}
-        <Card style={styles.section}>
+        <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title="Summary" />
           {report ? (
             <>
-              <Text style={styles.label}>Total Tasks: {report.tasks.total}</Text>
-              <Text style={styles.label}>Completed: {report.tasks.completed}</Text>
-              <Text style={styles.label}>Completion %: {Math.round(report.tasks.completion_rate * 100)}%</Text>
-              <Text style={styles.label}>Avg Mood: {report.mood.average != null ? Number(report.mood.average).toFixed(1) : 'N/A'}</Text>
+              <Text style={{ marginTop: spacing(2), fontSize:12, fontWeight:'600', color: palette.textLight }}>Total Tasks: {report.tasks.total}</Text>
+              <Text style={{ marginTop: spacing(2), fontSize:12, fontWeight:'600', color: palette.textLight }}>Completed: {report.tasks.completed}</Text>
+              <Text style={{ marginTop: spacing(2), fontSize:12, fontWeight:'600', color: palette.textLight }}>Completion %: {Math.round(report.tasks.completion_rate * 100)}%</Text>
+              <Text style={{ marginTop: spacing(2), fontSize:12, fontWeight:'600', color: palette.textLight }}>Avg Mood: {report.mood.average != null ? Number(report.mood.average).toFixed(1) : 'N/A'}</Text>
             </>
-          ) : <Text style={styles.label}>Generating...</Text>}
+          ) : <Text style={{ marginTop: spacing(2), fontSize:12, fontWeight:'600', color: palette.textLight }}>Generating...</Text>}
         </Card>
       </ScrollView>
       <OptionsDrawer
@@ -105,29 +106,6 @@ const ReportsScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  safe: { flex:1, backgroundColor: palette.background },
-  screen: { flex: 1, backgroundColor: palette.background },
-  container: { padding: spacing(4), paddingBottom: spacing(10) },
-  header: { ...typography.h1, color: palette.text },
-  section: { marginTop: spacing(4) },
-  label: { marginTop: spacing(2), fontSize: 12, fontWeight: '600', color: palette.textLight },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing(2), marginTop: spacing(2) },
-  flex: { flex: 1 },
-  muted: { fontSize: 12, color: palette.textLight, marginTop: spacing(2) },
-  error: { color: palette.danger, marginTop: spacing(2) },
-  range: { marginTop: spacing(2), fontSize: 12, color: palette.textLight },
-  subTitle: { marginTop: spacing(4), fontSize: 14, fontWeight: '600', color: palette.text },
-  sep: { height: 1, backgroundColor: palette.border },
-  activityRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing(2) },
-  dot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing(2) },
-  activityName: { flex: 1, fontSize: 14, color: palette.text },
-  activityDuration: { fontSize: 12, color: palette.textLight },
-  metricsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing(4) },
-  metricBox: { flex: 1, alignItems: 'center' },
-  metricLabel: { fontSize: 11, color: palette.textLight, textTransform: 'uppercase' },
-  metricValue: { fontSize: 16, fontWeight: '600', color: palette.text, marginTop: 2 },
-  topBar: { flexDirection:'row', justifyContent:'space-between', alignItems:'center' }
-});
+const styles = StyleSheet.create({ safe:{}, screen:{}, container:{}, header:{}, section:{}, label:{}, row:{}, flex:{}, muted:{}, error:{}, range:{}, subTitle:{}, sep:{}, activityRow:{}, dot:{}, activityName:{}, activityDuration:{}, metricsRow:{}, metricBox:{}, metricLabel:{}, metricValue:{}, topBar:{} });
 
 export default ReportsScreen;

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { getActionClasses, getCurrentActivity, getTodaysActivities, startActivity, stopCurrentActivity } from '../services/Database';
-import theme, { palette, spacing, typography } from '../constants/theme';
+import { useTheme } from '../constants/theme';
 import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import PrimaryButton from '../components/ui/PrimaryButton';
@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import OptionsDrawer from '../components/ui/OptionsDrawer';
 
 const HomeScreen = ({ navigation }) => {
+  const { palette, spacing, typography } = useTheme();
   const [actionClasses, setActionClasses] = useState([]);
   const [current, setCurrent] = useState(null);
   const [activities, setActivities] = useState([]);
@@ -51,41 +52,41 @@ const HomeScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}> 
-      <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
-        <View style={styles.topBar}>
-          <Text style={styles.appTitle}>NeuroPilot</Text>
-          <View style={styles.topActions}>
-            <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22 }}>☰</Text></TouchableOpacity>
+    <SafeAreaView style={{ flex:1, backgroundColor: palette.background }} edges={['top']}> 
+      <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding: spacing(4), paddingBottom: spacing(12) }}>
+        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom: spacing(4) }}>
+          <Text style={{ ...typography.h1, color: palette.text }}>NeuroPilot</Text>
+          <View style={{ flexDirection:'row', gap: spacing(2) }}>
+            <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22, color: palette.text }}>☰</Text></TouchableOpacity>
           </View>
         </View>
-        <Card style={styles.section}>
+        <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title={current ? 'Current Activity' : 'Start an Activity'} />
           {current ? (
-            <View style={styles.currentRow}>
-              <Text style={styles.currentText}>{current.action_class_name}</Text>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
+              <Text style={{ ...typography.h2, color: palette.primary }}>{current.action_class_name}</Text>
               <PrimaryButton small title="Stop" onPress={handleStop} />
             </View>
           ) : (
-            <View style={styles.classWrap}>
+            <View style={{ flexDirection:'row', flexWrap:'wrap' }}>
               {actionClasses.map(cls => (
                 <Chip key={cls.action_class_id} label={cls.name} color={cls.color || palette.primary} onPress={() => handleStart(cls)} />
               ))}
             </View>
           )}
         </Card>
-        <Card style={styles.section}>
+        <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title="Today's Log" />
-          {loading ? <Text style={styles.muted}>Loading...</Text> : (
+          {loading ? <Text style={{ color: palette.textLight, fontSize:12 }}>Loading...</Text> : (
             <FlatList
               data={activities}
               keyExtractor={(item) => item.activity_id.toString()}
               scrollEnabled={false}
-              ItemSeparatorComponent={() => <View style={styles.sep} />}
+              ItemSeparatorComponent={() => <View style={{ height:1, backgroundColor: palette.border }} />}
               renderItem={({ item }) => (
-                <View style={styles.activityItem}>
-                  <Text style={styles.activityName}>{item.action_class_name}</Text>
-                  <Text style={styles.activityTime}>{new Date(item.start_time).toLocaleTimeString()} {item.end_time ? ' - ' + new Date(item.end_time).toLocaleTimeString() : '(running)'}</Text>
+                <View style={{ paddingVertical: spacing(2) }}>
+                  <Text style={{ fontWeight:'600', color: palette.text }}>{item.action_class_name}</Text>
+                  <Text style={{ fontSize:12, color: palette.textLight, marginTop:2 }}>{new Date(item.start_time).toLocaleTimeString()} {item.end_time ? ' - ' + new Date(item.end_time).toLocaleTimeString() : '(running)'}</Text>
                 </View>
               )}
             />
@@ -105,22 +106,7 @@ const HomeScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: palette.background },
-  screen: { flex: 1 },
-  container: { padding: spacing(4), paddingBottom: spacing(12) },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing(4) },
-  appTitle: { ...typography.h1, color: palette.text },
-  topActions: { flexDirection: 'row', gap: spacing(2) },
-  section: { marginTop: spacing(4) },
-  classWrap: { flexDirection: 'row', flexWrap: 'wrap' },
-  currentRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  currentText: { ...typography.h2, color: palette.primary },
-  muted: { color: palette.textLight, fontSize: 12 },
-  sep: { height: 1, backgroundColor: palette.border },
-  activityItem: { paddingVertical: spacing(2) },
-  activityName: { fontWeight: '600', color: palette.text },
-  activityTime: { fontSize: 12, color: palette.textLight, marginTop: 2 }
-});
+// retain styles shell
+const styles = StyleSheet.create({ safe:{}, screen:{}, container:{}, topBar:{}, appTitle:{}, topActions:{}, section:{}, classWrap:{}, currentRow:{}, currentText:{}, muted:{}, sep:{}, activityItem:{}, activityName:{}, activityTime:{} });
 
 export default HomeScreen;

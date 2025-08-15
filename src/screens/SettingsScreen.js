@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList } from 'react-native';
 import { getActionClasses, createActionClass, updateActionClass, deleteActionClass } from '../services/Database';
-import { palette, spacing, typography } from '../constants/theme';
+import { useTheme } from '../constants/theme';
 import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import PrimaryButton from '../components/ui/PrimaryButton';
@@ -12,6 +12,7 @@ import OptionsDrawer from '../components/ui/OptionsDrawer';
 const randomColor = () => '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
 
 const SettingsScreen = ({ navigation }) => {
+  const { palette, spacing, typography } = useTheme();
   const [classes, setClasses] = useState([]);
   const [name, setName] = useState('');
   const [editId, setEditId] = useState(null);
@@ -54,46 +55,46 @@ const SettingsScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
-        <View style={styles.topBar}>
-          <Text style={styles.header}>Settings</Text>
-          <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22 }}>☰</Text></TouchableOpacity>
+    <SafeAreaView style={{ flex:1, backgroundColor: palette.background }} edges={['top']}>
+      <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding: spacing(4), paddingBottom: spacing(10) }}>
+        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
+          <Text style={{ ...typography.h1, color: palette.text }}>Settings</Text>
+          <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22, color: palette.text }}>☰</Text></TouchableOpacity>
         </View>
-        <Card style={styles.section}>
+        <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title="Add Action Class" />
-          <View style={styles.row}>
-            <Input placeholder="New class name" value={name} onChangeText={setName} style={styles.flex} />
+          <View style={{ flexDirection:'row', alignItems:'center', marginTop: spacing(2), marginBottom: spacing(3) }}>
+            <Input placeholder="New class name" value={name} onChangeText={setName} style={{ flex:1 }} />
             <PrimaryButton small title="Add" onPress={handleAdd} />
           </View>
           {editId && (
-            <View style={styles.row}>
-              <Input placeholder="Edit name" value={editName} onChangeText={setEditName} style={styles.flex} />
+            <View style={{ flexDirection:'row', alignItems:'center', marginTop: spacing(2), marginBottom: spacing(3) }}>
+              <Input placeholder="Edit name" value={editName} onChangeText={setEditName} style={{ flex:1 }} />
               <PrimaryButton small title="Save" onPress={handleSaveEdit} />
               <PrimaryButton small title="Cancel" onPress={() => { setEditId(null); setEditName(''); }} />
             </View>
           )}
-          {error && <Text style={styles.error}>{error}</Text>}
+          {error && <Text style={{ color: palette.danger, marginTop: spacing(2) }}>{error}</Text>}
         </Card>
-        <Card style={styles.section}>
+        <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title="Action Classes" />
           <FlatList
             data={classes}
             keyExtractor={(item) => item.action_class_id.toString()}
-            ItemSeparatorComponent={() => <View style={styles.sep} />}
+            ItemSeparatorComponent={() => <View style={{ height:1, backgroundColor: palette.border }} />}
             renderItem={({ item }) => (
-              <View style={styles.item}>
-                <View style={[styles.color, { backgroundColor: item.color || palette.primary }]} />
-                <Text style={styles.itemText}>{item.name}</Text>
+              <View style={{ flexDirection:'row', alignItems:'center', paddingVertical: spacing(2), gap: spacing(2) }}>
+                <View style={{ width:14, height:14, borderRadius:4, backgroundColor: item.color || palette.primary }} />
+                <Text style={{ flex:1, fontSize:14, color: palette.text }}>{item.name}</Text>
                 <PrimaryButton small title="Edit" onPress={() => startEdit(item)} />
                 <PrimaryButton small title="Del" onPress={() => handleDelete(item.action_class_id)} />
               </View>
             )}
           />
         </Card>
-        <Card style={styles.section}>
+        <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title="Preferences" />
-          <Text style={styles.label}>Placeholder preference A</Text>
+          <Text style={{ marginTop: spacing(2), fontSize:12, fontWeight:'600', color: palette.textLight }}>Placeholder preference A</Text>
         </Card>
       </ScrollView>
       <OptionsDrawer
@@ -109,20 +110,7 @@ const SettingsScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  safe: { flex:1, backgroundColor: palette.background },
-  screen: { flex: 1, backgroundColor: palette.background },
-  container: { padding: spacing(4), paddingBottom: spacing(10) },
-  header: { ...typography.h1, color: palette.text },
-  section: { marginTop: spacing(4) },
-  row: { flexDirection: 'row', alignItems: 'center', marginTop: spacing(2), marginBottom: spacing(3) },
-  flex: { flex: 1 },
-  error: { color: palette.danger, marginTop: spacing(2) },
-  sep: { height: 1, backgroundColor: palette.border },
-  item: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing(2), gap: spacing(2) },
-  itemText: { flex: 1, fontSize: 14, color: palette.text },
-  color: { width: 14, height: 14, borderRadius: 4 },
-  topBar: { flexDirection:'row', justifyContent:'space-between', alignItems:'center' }
-});
+// retain styles object shell
+const styles = StyleSheet.create({ safe:{}, screen:{}, container:{}, header:{}, section:{}, row:{}, flex:{}, error:{}, sep:{}, item:{}, itemText:{}, color:{}, topBar:{} });
 
 export default SettingsScreen;

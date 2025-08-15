@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { getTasks, createTask, updateTask, deleteTask } from '../services/Database';
-import { palette, spacing, typography } from '../constants/theme';
+import { useTheme } from '../constants/theme';
 import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import PrimaryButton from '../components/ui/PrimaryButton';
@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import OptionsDrawer from '../components/ui/OptionsDrawer';
 
 const TaskScreen = ({ navigation }) => {
+  const { palette, typography, spacing } = useTheme();
   const [tasks, setTasks] = useState([]);
   const [name, setName] = useState('');
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -31,34 +32,34 @@ const TaskScreen = ({ navigation }) => {
   const remove = async (task) => { await deleteTask(task.task_id); refresh(); };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
-        <View style={styles.topBar}> 
-          <Text style={styles.header}>Tasks</Text>
-          <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22 }}>☰</Text></TouchableOpacity>
+    <SafeAreaView style={{ flex:1, backgroundColor: palette.background }} edges={['top']}>
+      <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding: spacing(4), paddingBottom: spacing(12) }}>
+        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}> 
+          <Text style={{ ...typography.h1, color: palette.text }}>Tasks</Text>
+          <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22, color: palette.text }}>☰</Text></TouchableOpacity>
         </View>
-        <Card style={styles.section}>
+        <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title="Create" />
-          <View style={styles.row}> 
-            <Input placeholder="New task" value={name} onChangeText={setName} style={styles.flex} />
+          <View style={{ flexDirection:'row', alignItems:'center', marginTop: spacing(2), marginBottom: spacing(3) }}> 
+            <Input placeholder="New task" value={name} onChangeText={setName} style={{ flex:1 }} />
             <PrimaryButton small title="Add" onPress={add} />
           </View>
         </Card>
-        <Card style={styles.section}>
+        <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title="All Tasks" />
           <FlatList
             data={tasks}
             keyExtractor={(item) => item.task_id.toString()}
             scrollEnabled={false}
-            ItemSeparatorComponent={() => <View style={styles.sep} />}
+            ItemSeparatorComponent={() => <View style={{ height:1, backgroundColor: palette.border }} />}
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.item} onPress={() => toggle(item)} onLongPress={() => remove(item)}>
-                <Text style={[styles.text, item.completed && styles.completed]}>• {item.name}</Text>
-                {item.due_date && <Text style={styles.due}>{item.due_date}</Text>}
+              <TouchableOpacity style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', paddingVertical: spacing(2) }} onPress={() => toggle(item)} onLongPress={() => remove(item)}>
+                <Text style={[{ fontSize:14, color: palette.text }, item.completed && { textDecorationLine:'line-through', color: palette.textLight }]}>• {item.name}</Text>
+                {item.due_date && <Text style={{ fontSize:11, color: palette.textLight }}>{item.due_date}</Text>}
               </TouchableOpacity>
             )}
           />
-          <Text style={styles.hint}>Tap to toggle, long-press to delete.</Text>
+          <Text style={{ fontSize:11, color: palette.textLight, marginTop: spacing(3) }}>Tap to toggle, long-press to delete.</Text>
         </Card>
       </ScrollView>
       <OptionsDrawer
@@ -74,21 +75,7 @@ const TaskScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  safe: { flex:1, backgroundColor: palette.background },
-  screen: { flex: 1, backgroundColor: palette.background },
-  container: { padding: spacing(4), paddingBottom: spacing(12) },
-  header: { ...typography.h1, color: palette.text },
-  section: { marginTop: spacing(4) },
-  row: { flexDirection: 'row', alignItems: 'center', marginTop: spacing(2), marginBottom: spacing(3) },
-  flex: { flex: 1 },
-  sep: { height: 1, backgroundColor: palette.border },
-  item: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing(2) },
-  text: { fontSize: 14, color: palette.text },
-  completed: { textDecorationLine: 'line-through', color: palette.textLight },
-  due: { fontSize: 11, color: palette.textLight },
-  hint: { fontSize: 11, color: palette.textLight, marginTop: spacing(3) },
-  topBar: { flexDirection:'row', justifyContent:'space-between', alignItems:'center' }
-});
+// retain styles shell
+const styles = StyleSheet.create({ safe:{}, screen:{}, container:{}, header:{}, section:{}, row:{}, flex:{}, sep:{}, item:{}, text:{}, completed:{}, due:{}, hint:{}, topBar:{} });
 
 export default TaskScreen;

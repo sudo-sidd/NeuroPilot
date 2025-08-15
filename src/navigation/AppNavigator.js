@@ -9,27 +9,29 @@ import ReportsScreen from '../screens/ReportsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ActivityScreen from '../screens/ActivityScreen';
 import DatabaseScreen from '../screens/DatabaseScreen';
-import { palette } from '../constants/theme';
-import { Text } from 'react-native';
+import { useTheme } from '../constants/theme';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-const MainTabs = () => (
-  <Tab.Navigator
-    initialRouteName="HomeTab"
-    screenOptions={{
-      headerShown: false,
-      tabBarActiveTintColor: palette.primary,
-      tabBarStyle: { backgroundColor: '#fff', borderTopColor: '#e2e8f0' },
-      tabBarLabelStyle: { fontSize: 12, fontWeight: '600' }
-    }}
-  >
-    <Tab.Screen name="TasksTab" component={TaskScreen} options={{ title: 'Tasks', tabBarIcon: () => <Text>🗂️</Text> }} />
-    <Tab.Screen name="HomeTab" component={HomeScreen} options={{ title: 'Action', tabBarIcon: () => <Text>⚡</Text> }} />
-    <Tab.Screen name="JournalTab" component={DailyFormScreen} options={{ title: 'Journal', tabBarIcon: () => <Text>📝</Text> }} />
-  </Tab.Navigator>
-);
+const MainTabs = () => {
+  const { palette } = useTheme();
+  return (
+    <Tab.Navigator
+      initialRouteName="HomeTab"
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: palette.primary,
+        tabBarStyle: { backgroundColor: palette.surface, borderTopColor: palette.border },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' }
+      }}
+    >
+      <Tab.Screen name="TasksTab" component={TaskScreen} options={{ title: 'Tasks', tabBarIcon: () => <Text>🗂️</Text> }} />
+      <Tab.Screen name="HomeTab" component={HomeScreen} options={{ title: 'Action', tabBarIcon: () => <Text>⚡</Text> }} />
+      <Tab.Screen name="JournalTab" component={DailyFormScreen} options={{ title: 'Journal', tabBarIcon: () => <Text>📝</Text> }} />
+    </Tab.Navigator>
+  );
+};
 
 const AppNavigator = () => {
   return (
