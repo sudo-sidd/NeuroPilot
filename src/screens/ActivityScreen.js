@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Animated, Easing, DeviceEventEmitter } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import OptionsDrawer from '../components/ui/OptionsDrawer';
 import { useTheme, useThemeMode } from '../constants/theme';
 import { getActionClasses, getCurrentActivity, getTodaysActivities, startActivity, stopCurrentActivity } from '../services/Database';
 import Chip from '../components/ui/Chip';
@@ -12,7 +11,6 @@ import PrimaryButton from '../components/ui/PrimaryButton';
 const ActivityScreen = ({ navigation }) => {
   const { palette, spacing, typography } = useTheme();
   const { reducedMotion } = useThemeMode();
-  const [drawerVisible, setDrawerVisible] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [simpleMode, setSimpleMode] = useState(false);
   const [classes, setClasses] = useState([]);
@@ -75,9 +73,8 @@ const ActivityScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={{ flex:1, backgroundColor: palette.background }} edges={['top']}> 
       <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding: spacing(4), paddingBottom: spacing(14) }}>
-        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom: spacing(4) }}>
+        <View style={{ marginBottom: spacing(4) }}>
           <Text style={{ ...typography.h1, color: palette.text }}>Activity</Text>
-          <TouchableOpacity onPress={() => setDrawerVisible(true)} accessibilityRole="button" accessibilityLabel="Open options menu"><Text style={{ fontSize:22, color: palette.text }}>☰</Text></TouchableOpacity>
         </View>
         {/* Breathing ring */}
         <View style={{ alignItems:'center', marginTop: spacing(2) }}>
@@ -116,15 +113,6 @@ const ActivityScreen = ({ navigation }) => {
           )}
         </Card>
       </ScrollView>
-      <OptionsDrawer
-        visible={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
-        onNavigate={(route) => navigation.navigate(route)}
-        darkMode={darkMode}
-        onToggleDark={() => setDarkMode(x => !x)}
-        simpleMode={simpleMode}
-        onToggleSimple={() => setSimpleMode(x => !x)}
-      />
     </SafeAreaView>
   );
 };

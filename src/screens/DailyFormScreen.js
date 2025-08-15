@@ -7,7 +7,6 @@ import SectionHeader from '../components/ui/SectionHeader';
 import PrimaryButton from '../components/ui/PrimaryButton';
 import Input from '../components/ui/Input';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import OptionsDrawer from '../components/ui/OptionsDrawer';
 
 const isoToday = () => new Date().toISOString().slice(0,10);
 
@@ -19,9 +18,6 @@ const DailyFormScreen = ({ navigation }) => {
   const [highlights, setHighlights] = useState('');
   const [gratitude, setGratitude] = useState('');
   const [status, setStatus] = useState('');
-  const [drawerVisible, setDrawerVisible] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [simpleMode, setSimpleMode] = useState(false);
   const [open, setOpen] = useState({ mood:true, thoughts:true, highlights:true, gratitude:true });
   const toggleSection = (key) => setOpen(o => ({ ...o, [key]: !o[key] }));
   const gratitudeList = gratitude ? gratitude.split('\n').filter(Boolean) : [];
@@ -67,7 +63,6 @@ const DailyFormScreen = ({ navigation }) => {
       <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding: spacing(4), paddingBottom: spacing(10) }}>
         <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
           <Text style={{ ...typography.h1, color: palette.text }}>Journal</Text>
-          <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22, color: palette.text }}>☰</Text></TouchableOpacity>
         </View>
         <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title="Date" />
@@ -138,15 +133,6 @@ const DailyFormScreen = ({ navigation }) => {
           {status ? <Text style={{ fontSize:12, color: palette.textLight }}>{status}</Text> : null}
         </View>
       </ScrollView>
-      <OptionsDrawer
-        visible={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
-        onNavigate={(route) => navigation.navigate(route)}
-        darkMode={darkMode}
-        onToggleDark={() => setDarkMode(x => !x)}
-        simpleMode={simpleMode}
-        onToggleSimple={() => setSimpleMode(x => !x)}
-      />
     </SafeAreaView>
   );
 };

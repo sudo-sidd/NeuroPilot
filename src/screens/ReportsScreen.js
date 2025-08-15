@@ -7,7 +7,6 @@ import SectionHeader from '../components/ui/SectionHeader';
 import PrimaryButton from '../components/ui/PrimaryButton';
 import Input from '../components/ui/Input';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import OptionsDrawer from '../components/ui/OptionsDrawer';
 
 const isoToday = () => new Date().toISOString().slice(0,10);
 const mondayOfWeek = (iso) => { const d = new Date(iso + 'T00:00:00Z'); const day = d.getUTCDay(); const diff = (day === 0 ? -6 : 1 - day); d.setUTCDate(d.getUTCDate() + diff); return d.toISOString().slice(0,10); };
@@ -30,9 +29,6 @@ const ReportsScreen = ({ navigation }) => {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [drawerVisible, setDrawerVisible] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [simpleMode, setSimpleMode] = useState(false);
 
   const load = async () => {
     setLoading(true); setError('');
@@ -44,10 +40,7 @@ const ReportsScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={{ flex:1, backgroundColor: palette.background }} edges={['top']}>
       <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding: spacing(4), paddingBottom: spacing(10) }}>
-        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
-          <Text style={{ ...typography.h1, color: palette.text }}>Reports</Text>
-          <TouchableOpacity onPress={() => setDrawerVisible(true)}><Text style={{ fontSize:22, color: palette.text }}>☰</Text></TouchableOpacity>
-        </View>
+        <Text style={{ ...typography.h1, color: palette.text }}>Reports</Text>
         <Text style={{ ...typography.h1, color: palette.text }}>Weekly Report</Text>
         <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title="Controls" />
@@ -94,15 +87,6 @@ const ReportsScreen = ({ navigation }) => {
           ) : <Text style={{ marginTop: spacing(2), fontSize:12, fontWeight:'600', color: palette.textLight }}>Generating...</Text>}
         </Card>
       </ScrollView>
-      <OptionsDrawer
-        visible={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
-        onNavigate={(route) => navigation.navigate(route)}
-        darkMode={darkMode}
-        onToggleDark={() => setDarkMode(x => !x)}
-        simpleMode={simpleMode}
-        onToggleSimple={() => setSimpleMode(x => !x)}
-      />
     </SafeAreaView>
   );
 };

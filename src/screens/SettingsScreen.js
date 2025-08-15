@@ -7,7 +7,6 @@ import SectionHeader from '../components/ui/SectionHeader';
 import PrimaryButton from '../components/ui/PrimaryButton';
 import Input from '../components/ui/Input';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import OptionsDrawer from '../components/ui/OptionsDrawer';
 
 const randomColor = () => '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
 
@@ -19,10 +18,8 @@ const SettingsScreen = ({ navigation }) => {
   const [editId, setEditId] = useState(null);
   const [editName, setEditName] = useState('');
   const [error, setError] = useState(null);
-  const [drawerVisible, setDrawerVisible] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [simpleMode, setSimpleMode] = useState(false);
   const [showClassManager, setShowClassManager] = useState(false);
+  // Sidebar removed
 
   const refresh = async () => {
     try {
@@ -71,7 +68,6 @@ const SettingsScreen = ({ navigation }) => {
       <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding: spacing(4), paddingBottom: spacing(10) }}>
         <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
           <Text style={{ ...typography.h1, color: palette.text }}>Settings</Text>
-          <TouchableOpacity onPress={() => setDrawerVisible(true)} accessibilityRole="button" accessibilityLabel="Open options menu"><Text style={{ fontSize:22, color: palette.text }}>☰</Text></TouchableOpacity>
         </View>
         <View style={{ flexDirection:'row', flexWrap:'wrap', marginTop: spacing(4), marginHorizontal:-spacing(1) }}>
           {/* Theme Toggle */}
@@ -143,15 +139,7 @@ const SettingsScreen = ({ navigation }) => {
           </Card>
         )}
       </ScrollView>
-      <OptionsDrawer
-        visible={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
-        onNavigate={(route) => navigation.navigate(route)}
-        darkMode={darkMode}
-        onToggleDark={() => setDarkMode(x => !x)}
-        simpleMode={simpleMode}
-        onToggleSimple={() => setSimpleMode(x => !x)}
-      />
+      {/* OptionsDrawer removed */}
     </SafeAreaView>
   );
 };

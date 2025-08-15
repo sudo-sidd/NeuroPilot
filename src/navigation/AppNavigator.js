@@ -27,11 +27,11 @@ const MainTabs = () => {
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' }
       }}
     >
+      <Tab.Screen name="SettingsTab" component={SettingsScreen} options={{ title: 'Settings', tabBarIcon: () => <Text>⚙️</Text> }} />
+      <Tab.Screen name="ReportsTab" component={ReportsScreen} options={{ title: 'Reports', tabBarIcon: () => <Text>📊</Text> }} />
       <Tab.Screen name="ActivityTab" component={ActivityScreen} options={{ title: 'Activity', tabBarIcon: () => <Text>⏱️</Text> }} />
       <Tab.Screen name="TasksTab" component={TaskScreen} options={{ title: 'Tasks', tabBarIcon: () => <Text>🗂️</Text> }} />
       <Tab.Screen name="JournalTab" component={DailyFormScreen} options={{ title: 'Journal', tabBarIcon: () => <Text>📝</Text> }} />
-      <Tab.Screen name="ReportsTab" component={ReportsScreen} options={{ title: 'Reports', tabBarIcon: () => <Text>📊</Text> }} />
-      <Tab.Screen name="SettingsTab" component={SettingsScreen} options={{ title: 'Settings', tabBarIcon: () => <Text>⚙️</Text> }} />
     </Tab.Navigator>
   );
 };

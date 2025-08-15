@@ -7,17 +7,12 @@ import SectionHeader from '../components/ui/SectionHeader';
 import PrimaryButton from '../components/ui/PrimaryButton';
 import Input from '../components/ui/Input';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import OptionsDrawer from '../components/ui/OptionsDrawer';
-import { PanGestureHandler, State } from 'react-native-gesture-handler';
 
 const TaskScreen = ({ navigation }) => {
   const { palette, typography, spacing } = useTheme();
   const { reducedMotion } = useThemeMode();
   const [tasks, setTasks] = useState([]);
   const [name, setName] = useState('');
-  const [drawerVisible, setDrawerVisible] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [simpleMode, setSimpleMode] = useState(false);
 
   const refresh = async () => {
     const t = await getTasks({ includeCompleted: true });
@@ -114,10 +109,7 @@ const TaskScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={{ flex:1, backgroundColor: palette.background }} edges={['top']}>
       <ScrollView style={{ flex:1 }} contentContainerStyle={{ padding: spacing(4), paddingBottom: spacing(12) }}>
-        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}> 
-          <Text style={{ ...typography.h1, color: palette.text }}>Tasks</Text>
-          <TouchableOpacity onPress={() => setDrawerVisible(true)} accessibilityRole="button" accessibilityLabel="Open options menu"><Text style={{ fontSize:22, color: palette.text }}>☰</Text></TouchableOpacity>
-        </View>
+        <View style={{ marginBottom: spacing(1) }}><Text style={{ ...typography.h1, color: palette.text }}>Tasks</Text></View>
         <Card style={{ marginTop: spacing(4) }}>
           <SectionHeader title="Create" />
           <View style={{ flexDirection:'row', alignItems:'center', marginTop: spacing(2), marginBottom: spacing(3) }}> 
@@ -129,15 +121,6 @@ const TaskScreen = ({ navigation }) => {
         <Section title="Today" data={grouped.today} empty="Nothing scheduled for today" />
         <Section title="Upcoming" data={grouped.upcoming} empty="No upcoming tasks" />
       </ScrollView>
-      <OptionsDrawer
-        visible={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
-        onNavigate={(route) => navigation.navigate(route)}
-        darkMode={darkMode}
-        onToggleDark={() => setDarkMode(x => !x)}
-        simpleMode={simpleMode}
-        onToggleSimple={() => setSimpleMode(x => !x)}
-      />
     </SafeAreaView>
   );
 };
