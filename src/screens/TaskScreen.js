@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated, PanResponder } from 'react-native';
-import { getTasks, updateTask, deleteTask, snoozeTask, listTaskClasses } from '../services/Database';
+import { getTasks, updateTask, deleteTask, listTaskClasses } from '../services/Database';
 import { useTheme, useThemeMode } from '../constants/theme';
 import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
@@ -15,6 +15,7 @@ const TaskScreen = ({ navigation }) => {
   const [filter, setFilter] = useState(null); // optional quick filter inside columns
   const [isLandscape, setIsLandscape] = useState(Dimensions.get('window').width > Dimensions.get('window').height);
   const [draggingTask, setDraggingTask] = useState(null);
+  const [hoveredColumn, setHoveredColumn] = useState(null);
   const pan = useRef(new Animated.ValueXY()).current;
   const dragStart = useRef({ x:0, y:0 });
   const columnRefs = useRef({});
@@ -35,7 +36,6 @@ const TaskScreen = ({ navigation }) => {
 
   const toggle = async (task) => { await updateTask(task.task_id, { completed: task.completed ? 0 : 1 }); refresh(); };
   const remove = async (task) => { await deleteTask(task.task_id); refresh(); };
-  const snooze = async (task) => { const until = new Date(); until.setDate(until.getDate()+1); await snoozeTask(task.task_id, until.toISOString()); refresh(); };
 
   useEffect(()=>{ const sub = Dimensions.addEventListener('change', ({ window }) => { setIsLandscape(window.width > window.height); }); return () => { sub?.remove(); }; }, []);
 
@@ -45,36 +45,43 @@ const TaskScreen = ({ navigation }) => {
 
   const startDrag = (task) => (evt) => {
     setDraggingTask(task);
+    setHoveredColumn(null);
     dragStart.current = { x: evt.nativeEvent.pageX - 50, y: evt.nativeEvent.pageY - 20 }; // offset
     pan.setValue(dragStart.current);
+    measureColumns(); // ensure fresh layouts
+  };
+
+  const updateHover = (pageX, pageY) => {
+    const entry = Object.entries(columnLayouts.current).find(([key, rect]) => pageX >= rect.x && pageX <= rect.x+rect.width && pageY >= rect.y && pageY <= rect.y+rect.height);
+    const key = entry ? entry[0] : null;
+    if(key !== hoveredColumn) setHoveredColumn(key);
   };
 
   const finalizeDrop = (pageX, pageY) => {
     if(!draggingTask){ return; }
-    const entry = Object.entries(columnLayouts.current).find(([key, rect]) => pageX >= rect.x && pageX <= rect.x+rect.width && pageY >= rect.y && pageY <= rect.y+rect.height);
-    if(entry){ const [targetKey] = entry; moveTaskToColumn(draggingTask, targetKey); }
+    updateHover(pageX, pageY);
+    if(hoveredColumn){ moveTaskToColumn(draggingTask, hoveredColumn); }
     setDraggingTask(null);
+    setHoveredColumn(null);
   };
 
   const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onStartShouldSetPanResponderCapture: () => !!draggingTask,
     onMoveShouldSetPanResponder: () => !!draggingTask,
-    onPanResponderMove: (e, g) => { if(draggingTask){ pan.setValue({ x: dragStart.current.x + g.dx, y: dragStart.current.y + g.dy }); } },
+    onMoveShouldSetPanResponderCapture: () => !!draggingTask,
+    onPanResponderMove: (e, g) => { if(draggingTask){ const x = dragStart.current.x + g.dx; const y = dragStart.current.y + g.dy; pan.setValue({ x, y }); updateHover(e.nativeEvent.pageX, e.nativeEvent.pageY); } },
     onPanResponderRelease: (e) => finalizeDrop(e.nativeEvent.pageX, e.nativeEvent.pageY),
     onPanResponderTerminate: (e) => finalizeDrop(e.nativeEvent.pageX, e.nativeEvent.pageY)
   })).current;
 
   const moveTaskToColumn = async (task, columnKey) => {
-    const today = new Date();
-    const todayISO = today.toISOString().slice(0,10);
-    const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1); const yesterdayISO = yesterday.toISOString().slice(0,10);
-    const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1); const tomorrowISO = tomorrow.toISOString().slice(0,10);
+    const todayISO = new Date().toISOString().slice(0,10);
     let patch = {};
     switch(columnKey){
-      case 'backlog': patch = { due_date: null, completed:0 }; break;
-      case 'overdue': patch = { due_date: yesterdayISO, completed:0 }; break;
-      case 'today': patch = { due_date: todayISO, completed:0 }; break;
-      case 'upcoming': patch = { due_date: task.due_date && task.due_date > todayISO ? task.due_date : tomorrowISO, completed:0 }; break;
-      case 'completed': patch = { completed:1 }; break;
+      case 'todo': patch = { start_date: null, completed:0 }; break;
+      case 'ongoing': patch = { start_date: task.start_date || todayISO, completed:0 }; break;
+      case 'done': patch = { completed:1 }; break;
       default: break;
     }
     try { await updateTask(task.task_id, patch); refresh(); } catch {}
@@ -86,16 +93,14 @@ const TaskScreen = ({ navigation }) => {
 
   const columns = React.useMemo(() => {
     const colDefs = [
-      { key:'backlog', title:'Backlog', filter: t => !t.completed && !t.due_date },
-      { key:'overdue', title:'Overdue', filter: t => !t.completed && t.due_date && t.due_date < todayISO },
-      { key:'today', title:'Today', filter: t => !t.completed && t.due_date === todayISO },
-      { key:'upcoming', title:'Upcoming', filter: t => !t.completed && t.due_date && t.due_date > todayISO },
-      { key:'completed', title:'Completed', filter: t => t.completed }
+      { key:'todo', title:'To-Do', filter: t => !t.completed && !t.start_date },
+      { key:'ongoing', title:'Ongoing', filter: t => !t.completed && !!t.start_date },
+      { key:'done', title:'Done', filter: t => t.completed }
     ];
     return colDefs.map(c => ({ ...c, items: tasks.filter(c.filter).sort((a,b)=>{
       if(a.completed!==b.completed) return a.completed - b.completed;
       if((b.priority||0)!==(a.priority||0)) return (b.priority||0)-(a.priority||0);
-      return (a.due_date||'').localeCompare(b.due_date||'');
+      return (a.start_date||'').localeCompare(b.start_date||'');
     }) }));
   }, [tasks, todayISO]);
 
@@ -105,17 +110,12 @@ const TaskScreen = ({ navigation }) => {
         <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }} numberOfLines={2}>{item.name}</Text>
         <View style={{ flexDirection:'row', alignItems:'center', marginTop:4 }}>
           {item.priority && <Text style={{ fontSize:11, color: palette.textLight, marginRight:6 }}>P{item.priority}</Text>}
-          {item.due_date && <Text style={{ fontSize:11, color: palette.textLight }}>{item.due_date}</Text>}
+          {item.start_date && <Text style={{ fontSize:11, color: palette.textLight }}>{item.start_date}</Text>}
         </View>
         <View style={{ flexDirection:'row', marginTop: spacing(1) }}>
           <TouchableOpacity onPress={()=> toggle(item)} style={{ paddingVertical:4, paddingHorizontal:8, borderRadius:6, backgroundColor: item.completed? palette.primary : palette.border, marginRight:6 }}>
             <Text style={{ fontSize:11, color: item.completed? '#fff': palette.text }}>{item.completed? 'Undo':'Done'}</Text>
           </TouchableOpacity>
-          {!item.completed && (
-            <TouchableOpacity onPress={()=> snooze(item)} style={{ paddingVertical:4, paddingHorizontal:8, borderRadius:6, backgroundColor: palette.border, marginRight:6 }}>
-              <Text style={{ fontSize:11, color: palette.text }}>Snooze</Text>
-            </TouchableOpacity>
-          )}
           <TouchableOpacity onPress={()=> remove(item)} style={{ paddingVertical:4, paddingHorizontal:8, borderRadius:6, backgroundColor: palette.border }}>
             <Text style={{ fontSize:11, color: palette.text }}>Del</Text>
           </TouchableOpacity>
@@ -124,19 +124,21 @@ const TaskScreen = ({ navigation }) => {
     </TouchableOpacity>
   );
 
-  const renderColumn = (col) => (
+  const renderColumn = (col) => {
+    const isHover = hoveredColumn === col.key;
+    return (
     <View key={col.key} ref={r => { columnRefs.current[col.key]=r; }} onLayout={measureColumns} style={isLandscape ? { width:260, marginHorizontal: spacing(1) } : { width:'100%', marginVertical: spacing(1) }}>
-      <Card style={{ padding: spacing(2), minHeight: 120 }}>
+      <Card style={{ padding: spacing(2), minHeight: 120, borderWidth: isHover? 2:1, borderColor: isHover? palette.primary : (palette.border||'#333'), backgroundColor: isHover? (palette.surfaceHover || palette.surface) : (palette.surface) }}>
         <View style={{ flexDirection:'row', alignItems:'center' }}>
           <SectionHeader title={`${col.title} (${col.items.length})`} />
         </View>
         <View style={{ marginTop: spacing(1) }}>
-          {col.items.length === 0 && <Text style={{ fontSize:12, color: palette.textLight }}>Empty</Text>}
+          {col.items.length === 0 && <Text style={{ fontSize:12, color: palette.textLight }}>{isHover? 'Drop here' : 'Empty'}</Text>}
           {col.items.map(t => <TaskCard key={t.task_id} item={t} />)}
         </View>
       </Card>
     </View>
-  );
+  ); };
 
   return (
     <SafeAreaView style={{ flex:1, backgroundColor: palette.background }} edges={['top']} {...panResponder.panHandlers}>
@@ -145,16 +147,16 @@ const TaskScreen = ({ navigation }) => {
         <Text style={{ ...typography.h1, color: palette.text }}>Tasks</Text>
       </View>
       {isLandscape ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing(3), paddingBottom: spacing(6), paddingTop: spacing(2) }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} scrollEnabled={!draggingTask} contentContainerStyle={{ paddingHorizontal: spacing(3), paddingBottom: spacing(6), paddingTop: spacing(2) }}>
           {columns.map(renderColumn)}
         </ScrollView>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing(3), paddingBottom: spacing(10), paddingTop: spacing(2) }}>
+        <ScrollView showsVerticalScrollIndicator={false} scrollEnabled={!draggingTask} contentContainerStyle={{ paddingHorizontal: spacing(3), paddingBottom: spacing(10), paddingTop: spacing(2) }}>
           {columns.map(renderColumn)}
         </ScrollView>
       )}
       {draggingTask && (
-        <Animated.View pointerEvents='none' style={{ position:'absolute', left: pan.x, top: pan.y, width: 220, zIndex:1000, opacity:0.9, transform:[{ scale:1 }] }}>
+        <Animated.View pointerEvents='none' style={{ position:'absolute', left: pan.x, top: pan.y, width: 220, zIndex:1000, opacity:0.9, transform:[{ scale:1 }] }} {...panResponder.panHandlers}>
           <View style={{ backgroundColor: palette.surfaceAlt || palette.surface, borderRadius:10, padding: spacing(2), shadowColor:'#000', shadowOpacity:0.2, shadowRadius:6, elevation:5 }}>
             <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }}>{draggingTask.name}</Text>
           </View>

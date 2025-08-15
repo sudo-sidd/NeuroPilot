@@ -25,8 +25,6 @@ const RootInner = () => {
   const [selectedClass, setSelectedClass] = React.useState(null);
   const [activityDesc, setActivityDesc] = React.useState('');
   const [taskName, setTaskName] = React.useState('');
-  const [taskDueDate, setTaskDueDate] = React.useState(''); // YYYY-MM-DD
-  const [taskDueTime, setTaskDueTime] = React.useState(''); // HH:MM optional
   const [taskStartDate, setTaskStartDate] = React.useState('');
   const [taskStartTime, setTaskStartTime] = React.useState('');
   const [taskPriority, setTaskPriority] = React.useState(3);
@@ -35,7 +33,6 @@ const RootInner = () => {
   const [currentActivity, setCurrentActivity] = React.useState(null);
   // Task time picker state
   const [taskTimePickerVisible, setTaskTimePickerVisible] = React.useState(false);
-  const [taskTimePickerMode, setTaskTimePickerMode] = React.useState('start'); // 'start' | 'due'
   const taskHourScrollRef = React.useRef(null);
   const taskMinuteScrollRef = React.useRef(null);
   const taskHours = React.useMemo(()=>Array.from({length:24},(_,i)=>i),[]);
@@ -44,7 +41,6 @@ const RootInner = () => {
   const formatHM = (h,m)=> h.toString().padStart(2,'0')+':'+m.toString().padStart(2,'0');
   // Date picker state
   const [taskDatePickerVisible, setTaskDatePickerVisible] = React.useState(false);
-  const [taskDatePickerMode, setTaskDatePickerMode] = React.useState('start'); // 'start' | 'due'
   const yearScrollRef = React.useRef(null);
   const monthScrollRef = React.useRef(null);
   const dayScrollRef = React.useRef(null);
@@ -69,7 +65,7 @@ const RootInner = () => {
   // Auto-scroll time picker wheels when modal opens
   useEffect(() => {
     if (taskTimePickerVisible) {
-      const { h, m } = parseHM(taskTimePickerMode === 'start' ? taskStartTime : taskDueTime);
+      const { h, m } = parseHM(taskStartTime);
       // Delay to ensure ScrollViews are laid out
       const t = setTimeout(() => {
         if (taskHourScrollRef.current) taskHourScrollRef.current.scrollTo({ y: h * 40, animated: true });
@@ -77,24 +73,23 @@ const RootInner = () => {
       }, 0);
       return () => clearTimeout(t);
     }
-  }, [taskTimePickerVisible, taskTimePickerMode, taskStartTime, taskDueTime]);
+  }, [taskTimePickerVisible, taskStartTime]);
 
   // Auto-scroll date picker wheels when modal opens
   useEffect(() => {
     if (taskDatePickerVisible) {
-      const target = taskDatePickerMode === 'start' ? taskStartDate : taskDueDate;
-      const { y, m, d } = parseDate(target);
+      const { y, m, d } = parseDate(taskStartDate);
       const t = setTimeout(() => {
         if (yearScrollRef.current) {
           const yi = years.indexOf(y);
-            if (yi >= 0) yearScrollRef.current.scrollTo({ y: yi * 40, animated: true });
+          if (yi >= 0) yearScrollRef.current.scrollTo({ y: yi * 40, animated: true });
         }
         if (monthScrollRef.current) monthScrollRef.current.scrollTo({ y: (m - 1) * 40, animated: true });
         if (dayScrollRef.current) dayScrollRef.current.scrollTo({ y: (d - 1) * 40, animated: true });
       }, 0);
       return () => clearTimeout(t);
     }
-  }, [taskDatePickerVisible, taskDatePickerMode, taskStartDate, taskDueDate, years]);
+  }, [taskDatePickerVisible, taskStartDate, years]);
 
   const navigateSafe = (name, params) => { try { navRef.navigate(name, params || undefined); } catch {} };
 
@@ -125,7 +120,7 @@ const RootInner = () => {
     navRef.navigate('ActivityTab', { ts: Date.now() });
   };
   const submitTask = async () => {
-    if (!taskName.trim()) return; await createTask({ name: taskName.trim(), priority: taskPriority, taskClassId, dueDate: taskDueDate || null, dueTime: taskDueTime || null, startDate: taskStartDate || null, startTime: taskStartTime || null }); setTaskName(''); setTaskDueDate(''); setTaskDueTime(''); setTaskStartDate(''); setTaskStartTime(''); setTaskPriority(3); setTaskClassId(null); setTaskModal(false); DeviceEventEmitter.emit('tasksUpdated'); navigateSafe('TasksTab');
+    if (!taskName.trim()) return; await createTask({ name: taskName.trim(), priority: taskPriority, taskClassId, startDate: taskStartDate || null, startTime: taskStartTime || null }); setTaskName(''); setTaskStartDate(''); setTaskStartTime(''); setTaskPriority(3); setTaskClassId(null); setTaskModal(false); DeviceEventEmitter.emit('tasksUpdated'); navigateSafe('TasksTab');
   };
 
   const mondays = React.useMemo(() => {
@@ -203,20 +198,12 @@ const RootInner = () => {
                 ))}
               </ScrollView>
               <Text style={{ fontSize:12, color: palette.textLight, marginTop: spacing(3) }}>Start Date (YYYY-MM-DD)</Text>
-              <TouchableOpacity onPress={()=> { setTaskDatePickerMode('start'); setTaskDatePickerVisible(true); }} style={{ marginTop: spacing(1), paddingVertical:12, paddingHorizontal:14, borderRadius:8, backgroundColor: palette.border }} accessibilityRole="button" accessibilityLabel="Select start date">
+              <TouchableOpacity onPress={()=> { setTaskDatePickerVisible(true); }} style={{ marginTop: spacing(1), paddingVertical:12, paddingHorizontal:14, borderRadius:8, backgroundColor: palette.border }} accessibilityRole="button" accessibilityLabel="Select start date">
                 <Text style={{ fontSize:13, color: taskStartDate? palette.text : palette.textLight }}>{taskStartDate || 'YYYY-MM-DD'}</Text>
               </TouchableOpacity>
               <Text style={{ fontSize:12, color: palette.textLight, marginTop: spacing(3) }}>Start Time (optional)</Text>
-              <TouchableOpacity onPress={()=> { setTaskTimePickerMode('start'); setTaskTimePickerVisible(true); }} style={{ marginTop: spacing(1), paddingVertical:12, paddingHorizontal:14, borderRadius:8, backgroundColor: palette.border }} accessibilityRole="button" accessibilityLabel="Select start time">
+              <TouchableOpacity onPress={()=> { setTaskTimePickerVisible(true); }} style={{ marginTop: spacing(1), paddingVertical:12, paddingHorizontal:14, borderRadius:8, backgroundColor: palette.border }} accessibilityRole="button" accessibilityLabel="Select start time">
                 <Text style={{ fontSize:13, color: taskStartTime? palette.text : palette.textLight }}>{taskStartTime || 'HH:MM'}</Text>
-              </TouchableOpacity>
-              <Text style={{ fontSize:12, color: palette.textLight, marginTop: spacing(3) }}>Due Date (YYYY-MM-DD)</Text>
-              <TouchableOpacity onPress={()=> { setTaskDatePickerMode('due'); setTaskDatePickerVisible(true); }} style={{ marginTop: spacing(1), paddingVertical:12, paddingHorizontal:14, borderRadius:8, backgroundColor: palette.border }} accessibilityRole="button" accessibilityLabel="Select due date">
-                <Text style={{ fontSize:13, color: taskDueDate? palette.text : palette.textLight }}>{taskDueDate || 'YYYY-MM-DD'}</Text>
-              </TouchableOpacity>
-              <Text style={{ fontSize:12, color: palette.textLight, marginTop: spacing(3) }}>Due Time (optional)</Text>
-              <TouchableOpacity onPress={()=> { setTaskTimePickerMode('due'); setTaskTimePickerVisible(true); }} style={{ marginTop: spacing(1), paddingVertical:12, paddingHorizontal:14, borderRadius:8, backgroundColor: palette.border }} accessibilityRole="button" accessibilityLabel="Select due time">
-                <Text style={{ fontSize:13, color: taskDueTime? palette.text : palette.textLight }}>{taskDueTime || 'HH:MM'}</Text>
               </TouchableOpacity>
             </ScrollView>
             <View style={{ flexDirection:'row', justifyContent:'flex-end', marginTop: spacing(3) }}>
@@ -244,28 +231,28 @@ const RootInner = () => {
         </View>
       </Modal>
       <Modal visible={taskTimePickerVisible} transparent animationType='fade' onRequestClose={()=> setTaskTimePickerVisible(false)}>
-        {/* removed inline useEffect; handled by top-level effect */}
+        {/* start-only time picker */}
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.55)', justifyContent:'center', alignItems:'center' }}>
           <View style={{ backgroundColor: palette.surface, padding: spacing(4), borderRadius:16, width:'80%' }}>
-            <Text style={{ fontSize:16, fontWeight:'600', color: palette.text, marginBottom: spacing(2) }}>Select {taskTimePickerMode==='start'?'Start':'Due'} Time</Text>
+            <Text style={{ fontSize:16, fontWeight:'600', color: palette.text, marginBottom: spacing(2) }}>Select Start Time</Text>
             <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
               <ScrollView ref={taskHourScrollRef} style={{ height:200, width:'45%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
-                {taskHours.map(h=> (
-                  <TouchableOpacity key={'th'+h} onPress={()=>{ const {m}=parseHM(taskTimePickerMode==='start'?taskStartTime:taskDueTime); if(taskTimePickerMode==='start'){ const newVal=formatHM(h,m); setTaskStartTime(newVal); if(!taskDueTime) setTaskDueTime(newVal); } else { setTaskDueTime(formatHM(h,m)); } }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
-                    <Text style={{ color: (parseHM(taskTimePickerMode==='start'?taskStartTime:taskDueTime).h===h)? palette.primary : palette.text }}>{h.toString().padStart(2,'0')}</Text>
+                {taskHours.map(h=> { const sel = parseHM(taskStartTime).h===h; return (
+                  <TouchableOpacity key={'th'+h} onPress={()=>{ const {m}=parseHM(taskStartTime); setTaskStartTime(formatHM(h,m)); }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
+                    <Text style={{ color: sel? palette.primary : palette.text }}>{h.toString().padStart(2,'0')}</Text>
                   </TouchableOpacity>
-                ))}
+                ); })}
               </ScrollView>
               <ScrollView ref={taskMinuteScrollRef} style={{ height:200, width:'45%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
-                {taskMinutes.map(m=> (
-                  <TouchableOpacity key={'tm'+m} onPress={()=>{ const {h}=parseHM(taskTimePickerMode==='start'?taskStartTime:taskDueTime); if(taskTimePickerMode==='start'){ const newVal=formatHM(h,m); setTaskStartTime(newVal); if(!taskDueTime) setTaskDueTime(newVal); } else { setTaskDueTime(formatHM(h,m)); } }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
-                    <Text style={{ color: (parseHM(taskTimePickerMode==='start'?taskStartTime:taskDueTime).m===m)? palette.primary : palette.text }}>{m.toString().padStart(2,'0')}</Text>
+                {taskMinutes.map(m=> { const sel = parseHM(taskStartTime).m===m; return (
+                  <TouchableOpacity key={'tm'+m} onPress={()=>{ const {h}=parseHM(taskStartTime); setTaskStartTime(formatHM(h,m)); }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
+                    <Text style={{ color: sel? palette.primary : palette.text }}>{m.toString().padStart(2,'0')}</Text>
                   </TouchableOpacity>
-                ))}
+                ); })}
               </ScrollView>
             </View>
             <View style={{ flexDirection:'row', justifyContent:'space-between', marginTop: spacing(3) }}>
-              <TouchableOpacity onPress={()=> { if(taskTimePickerMode==='start'){ setTaskStartTime(''); } else { setTaskDueTime(''); } }} style={{ paddingVertical:10, paddingHorizontal:14 }}>
+              <TouchableOpacity onPress={()=> { setTaskStartTime(''); }} style={{ paddingVertical:10, paddingHorizontal:14 }}>
                 <Text style={{ color: palette.textLight }}>Clear</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={()=> setTaskTimePickerVisible(false)} style={{ paddingVertical:10, paddingHorizontal:14 }}>
@@ -276,36 +263,37 @@ const RootInner = () => {
         </View>
       </Modal>
       <Modal visible={taskDatePickerVisible} transparent animationType='fade' onRequestClose={()=> setTaskDatePickerVisible(false)}>
-        {/* removed inline useEffect; handled by top-level effect */}
+        {/* start-only date picker */}
         <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.55)', justifyContent:'center', alignItems:'center' }}>
           <View style={{ backgroundColor: palette.surface, padding: spacing(4), borderRadius:16, width:'90%' }}>
-            <Text style={{ fontSize:16, fontWeight:'600', color: palette.text, marginBottom: spacing(2) }}>Select {taskDatePickerMode==='start'?'Start':'Due'} Date</Text>
-            {(() => { const {y,m} = parseDate(taskDatePickerMode==='start'?taskStartDate:taskDueDate); var dynDays = getDaysArray(y,m); if(dynDays.length !== daysInMonth(y,m)) dynDays = getDaysArray(y,m); return (
-            <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
-              <ScrollView ref={yearScrollRef} style={{ height:200, width:'30%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
-                {years.map(yr => (
-                  <TouchableOpacity key={'yr'+yr} onPress={()=>{ const cur = parseDate(taskDatePickerMode==='start'?taskStartDate:taskDueDate); const maxDay = daysInMonth(yr, cur.m); const newDay = Math.min(cur.d, maxDay); const newVal = formatDate(yr, cur.m, newDay); if(taskDatePickerMode==='start'){ setTaskStartDate(newVal); if(!taskDueDate) setTaskDueDate(newVal); } else { setTaskDueDate(newVal); } }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
-                    <Text style={{ color: (parseDate(taskDatePickerMode==='start'?taskStartDate:taskDueDate).y===yr)? palette.primary : palette.text }}>{yr}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <ScrollView ref={monthScrollRef} style={{ height:200, width:'30%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
-                {months.map(mm => (
-                  <TouchableOpacity key={'mm'+mm} onPress={()=>{ const cur = parseDate(taskDatePickerMode==='start'?taskStartDate:taskDueDate); const maxDay = daysInMonth(cur.y, mm); const newDay = Math.min(cur.d, maxDay); const newVal = formatDate(cur.y, mm, newDay); if(taskDatePickerMode==='start'){ setTaskStartDate(newVal); if(!taskDueDate) setTaskDueDate(newVal); } else { setTaskDueDate(newVal); } }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
-                    <Text style={{ color: (parseDate(taskDatePickerMode==='start'?taskStartDate:taskDueDate).m===mm)? palette.primary : palette.text }}>{mm.toString().padStart(2,'0')}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <ScrollView ref={dayScrollRef} style={{ height:200, width:'30%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
-                {dynDays.map(dd => (
-                  <TouchableOpacity key={'dd'+dd} onPress={()=>{ const cur = parseDate(taskDatePickerMode==='start'?taskStartDate:taskDueDate); const newVal = formatDate(cur.y, cur.m, dd); if(taskDatePickerMode==='start'){ setTaskStartDate(newVal); if(!taskDueDate) setTaskDueDate(newVal); } else { setTaskDueDate(newVal); } }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
-                    <Text style={{ color: (parseDate(taskDatePickerMode==='start'?taskStartDate:taskDueDate).d===dd)? palette.primary : palette.text }}>{dd.toString().padStart(2,'0')}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View> ); })()}
+            <Text style={{ fontSize:16, fontWeight:'600', color: palette.text, marginBottom: spacing(2) }}>Select Start Date</Text>
+            {(() => { const {y,m} = parseDate(taskStartDate); let dynDays = getDaysArray(y,m); if(dynDays.length !== daysInMonth(y,m)) dynDays = getDaysArray(y,m); return (
+              <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
+                <ScrollView ref={yearScrollRef} style={{ height:200, width:'30%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
+                  {years.map(yr => { const sel = parseDate(taskStartDate).y===yr; return (
+                    <TouchableOpacity key={'yr'+yr} onPress={()=>{ const cur = parseDate(taskStartDate); const maxDay = daysInMonth(yr, cur.m); const newDay = Math.min(cur.d, maxDay); setTaskStartDate(formatDate(yr, cur.m, newDay)); }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
+                      <Text style={{ color: sel? palette.primary : palette.text }}>{yr}</Text>
+                    </TouchableOpacity>
+                  ); })}
+                </ScrollView>
+                <ScrollView ref={monthScrollRef} style={{ height:200, width:'30%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
+                  {months.map(mm => { const sel = parseDate(taskStartDate).m===mm; return (
+                    <TouchableOpacity key={'mm'+mm} onPress={()=>{ const cur = parseDate(taskStartDate); const maxDay = daysInMonth(cur.y, mm); const newDay = Math.min(cur.d, maxDay); setTaskStartDate(formatDate(cur.y, mm, newDay)); }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
+                      <Text style={{ color: sel? palette.primary : palette.text }}>{mm.toString().padStart(2,'0')}</Text>
+                    </TouchableOpacity>
+                  ); })}
+                </ScrollView>
+                <ScrollView ref={dayScrollRef} style={{ height:200, width:'30%' }} showsVerticalScrollIndicator={false} snapToInterval={40} decelerationRate='fast'>
+                  {dynDays.map(dd => { const sel = parseDate(taskStartDate).d===dd; return (
+                    <TouchableOpacity key={'dd'+dd} onPress={()=>{ const cur = parseDate(taskStartDate); setTaskStartDate(formatDate(cur.y, cur.m, dd)); }} style={{ height:40, justifyContent:'center', alignItems:'center' }}>
+                      <Text style={{ color: sel? palette.primary : palette.text }}>{dd.toString().padStart(2,'0')}</Text>
+                    </TouchableOpacity>
+                  ); })}
+                </ScrollView>
+              </View>
+            ); })()}
             <View style={{ flexDirection:'row', justifyContent:'space-between', marginTop: spacing(3) }}>
-              <TouchableOpacity onPress={()=> { if(taskDatePickerMode==='start'){ setTaskStartDate(''); } else { setTaskDueDate(''); } }} style={{ paddingVertical:10, paddingHorizontal:14 }}>
+              <TouchableOpacity onPress={()=> { setTaskStartDate(''); }} style={{ paddingVertical:10, paddingHorizontal:14 }}>
                 <Text style={{ color: palette.textLight }}>Clear</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={()=> setTaskDatePickerVisible(false)} style={{ paddingVertical:10, paddingHorizontal:14 }}>
