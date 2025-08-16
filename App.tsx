@@ -6,7 +6,7 @@ import { requestNotificationPermission } from './src/services/Notifications';
 import { ThemeProvider, useTheme } from './src/constants/theme';
 import FAB from './src/components/ui/FAB';
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
-import { Modal, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { Modal, View, Text, ScrollView, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
 import Input from './src/components/ui/Input';
 import PrimaryButton from './src/components/ui/PrimaryButton';
 import { getActionClasses, startActivity, createTask, getCurrentActivity, stopCurrentActivity, listTaskClasses } from './src/services/Database';
@@ -110,7 +110,8 @@ const RootInner = () => {
         />
       )}
       <Modal visible={activityModal} transparent animationType="fade" onRequestClose={() => setActivityModal(false)}>
-        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center', padding: spacing(4) }}>
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center', padding: spacing(4), position:'relative' }}>
+          <Pressable accessibilityLabel="Dismiss activity modal" style={StyleSheet.absoluteFill} onPress={() => setActivityModal(false)} />
           <View style={{ backgroundColor: palette.surface, borderRadius:12, padding: spacing(4) }}>
             <Text style={{ fontSize:16, fontWeight:'700', color: palette.text }}>Start Activity</Text>
             <ScrollView horizontal style={{ marginTop: spacing(3) }} showsHorizontalScrollIndicator={false}>
@@ -121,13 +122,16 @@ const RootInner = () => {
             <Input placeholder="Description (optional)" value={activityDesc} onChangeText={setActivityDesc} style={{ marginTop: spacing(3) }} />
             <View style={{ flexDirection:'row', justifyContent:'flex-end', marginTop: spacing(4) }}>
               <PrimaryButton small title="Cancel" onPress={() => setActivityModal(false)} accessibilityLabel="Cancel start" />
-              <PrimaryButton small title="Start" onPress={submitActivity} accessibilityLabel="Start activity" />
+              <View style={{ marginLeft: spacing(2) }}>
+                <PrimaryButton small title="Start" onPress={submitActivity} accessibilityLabel="Start activity" />
+              </View>
             </View>
           </View>
         </View>
       </Modal>
       <Modal visible={taskModal} transparent animationType="fade" onRequestClose={() => setTaskModal(false)}>
-        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center', padding: spacing(4) }}>
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center', padding: spacing(4), position:'relative' }}>
+          <Pressable accessibilityLabel="Dismiss new task modal" style={StyleSheet.absoluteFill} onPress={() => setTaskModal(false)} />
           <View style={{ backgroundColor: palette.surface, borderRadius:12, padding: spacing(4), maxHeight:'85%' }}>
             <ScrollView>
               <Text style={{ fontSize:16, fontWeight:'700', color: palette.text }}>New Task</Text>
@@ -153,13 +157,16 @@ const RootInner = () => {
             </ScrollView>
             <View style={{ flexDirection:'row', justifyContent:'flex-end', marginTop: spacing(3) }}>
               <PrimaryButton small title="Cancel" onPress={() => setTaskModal(false)} accessibilityLabel="Cancel task" />
-              <PrimaryButton small title="Add" onPress={submitTask} accessibilityLabel="Add task" />
+              <View style={{ marginLeft: spacing(2) }}>
+                <PrimaryButton small title="Add" onPress={submitTask} accessibilityLabel="Add task" />
+              </View>
             </View>
           </View>
         </View>
       </Modal>
       <Modal visible={reportModal} transparent animationType="fade" onRequestClose={() => setReportModal(false)}>
-        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center', padding: spacing(4) }}>
+        <View style={{ flex:1, backgroundColor:'rgba(0,0,0,0.4)', justifyContent:'center', padding: spacing(4), position:'relative' }}>
+          <Pressable accessibilityLabel="Dismiss report modal" style={StyleSheet.absoluteFill} onPress={() => setReportModal(false)} />
           <View style={{ backgroundColor: palette.surface, borderRadius:12, padding: spacing(4), maxHeight:'70%' }}>
             <Text style={{ fontSize:16, fontWeight:'700', color: palette.text }}>Select Week</Text>
             <ScrollView style={{ marginTop: spacing(3) }}>
