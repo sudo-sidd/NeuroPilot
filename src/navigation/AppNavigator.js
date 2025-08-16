@@ -13,6 +13,14 @@ import { Text, View } from 'react-native';
 
 const ICON_SIZE = 32;
 const Icon = ({ active, glyph, color }) => {
+  // Guard against missing glyph (e.g., newly added tab without icon mapping)
+  if (!glyph) {
+    return (
+      <View style={{ width: ICON_SIZE, height: ICON_SIZE, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 20, fontWeight: '600', color }}>{'?'}</Text>
+      </View>
+    );
+  }
   if (glyph.type === 'custom' && typeof glyph.render === 'function') {
     return (
       <View style={{ width: ICON_SIZE, height: ICON_SIZE, alignItems: 'center', justifyContent: 'center' }}>
@@ -80,7 +88,7 @@ const glyphs = {
       );
     }
   },
-  Journal: { outline: '✎', filled: '✎', fontSize: 26 }
+  Journal: { outline: '✎', filled: '✎', fontSize: 26 },
 };
 
 const Stack = createNativeStackNavigator();

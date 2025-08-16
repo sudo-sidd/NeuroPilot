@@ -120,6 +120,30 @@ export const migrations = [
       `ALTER TABLE Task ADD COLUMN start_time TEXT`,
       `ALTER TABLE Task ADD COLUMN due_time TEXT`
     ]
+  },
+  {
+    version: 12,
+    statements: [
+      `ALTER TABLE Task ADD COLUMN status TEXT`,
+      `ALTER TABLE Task ADD COLUMN sort_order INTEGER`,
+      `CREATE TABLE IF NOT EXISTS KanbanColumn (column_id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL UNIQUE, title TEXT NOT NULL, position INTEGER NOT NULL)`,
+      // Seed columns if empty
+      `INSERT INTO KanbanColumn (key, title, position) SELECT 'todo','To Do',0 WHERE NOT EXISTS (SELECT 1 FROM KanbanColumn WHERE key='todo')`,
+      `INSERT INTO KanbanColumn (key, title, position) SELECT 'in_progress','In Progress',1 WHERE NOT EXISTS (SELECT 1 FROM KanbanColumn WHERE key='in_progress')`,
+      `INSERT INTO KanbanColumn (key, title, position) SELECT 'done','Done',2 WHERE NOT EXISTS (SELECT 1 FROM KanbanColumn WHERE key='done')`,
+      // Backfill status based on existing task columns (only for rows where status is NULL)
+      `UPDATE Task SET status = CASE 
+          WHEN completed = 1 THEN 'done'
+          WHEN start_date IS NOT NULL AND completed = 0 THEN 'in_progress'
+          ELSE 'todo' END WHERE status IS NULL`,
+      // Backfill sort_order per status grouping if NULL
+      `WITH ranked AS (
+          SELECT task_id, status, ROW_NUMBER() OVER (PARTITION BY status ORDER BY priority DESC, task_id ASC) - 1 AS rn FROM Task
+        )
+        UPDATE Task SET sort_order = (SELECT rn FROM ranked r WHERE r.task_id = Task.task_id) WHERE sort_order IS NULL`,
+      `CREATE INDEX IF NOT EXISTS idx_task_status ON Task(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_task_status_sort ON Task(status, sort_order)`
+    ]
   }
 ];
 

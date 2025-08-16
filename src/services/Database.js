@@ -736,6 +736,85 @@ export const getActivityById = (id) => new Promise((resolve, reject) => {
   });
 });
 
+// Kanban board helpers
+export const listKanbanColumns = () => {
+  return new Promise((resolve, reject) => {
+    db.readTransaction(tx => {
+      tx.executeSql('SELECT * FROM KanbanColumn ORDER BY position ASC', [], (_, { rows }) => { const arr=[]; for(let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr); }, (_,e)=>reject(e));
+    });
+  });
+};
+
+export const createKanbanColumn = ({ key, title }) => {
+  return new Promise((resolve, reject) => {
+    if(!key || !title) return reject(new Error('key/title required'));
+    db.transaction(tx => {
+      tx.executeSql('SELECT MAX(position) AS maxp FROM KanbanColumn', [], (_, { rows }) => {
+        const pos = rows.length? (rows.item(0).maxp || 0)+1 : 0;
+        tx.executeSql('INSERT INTO KanbanColumn (key, title, position) VALUES (?,?,?)', [key, title, pos], (_, r)=> resolve(r.insertId), (_,e)=>reject(e));
+      });
+    });
+  });
+};
+
+export const renameKanbanColumn = (columnId, title) => {
+  return new Promise((resolve, reject) => {
+    if(!columnId) return reject(new Error('id required'));
+    db.transaction(tx => tx.executeSql('UPDATE KanbanColumn SET title=? WHERE column_id=?', [title, columnId], (_,r)=>resolve(r.rowsAffected), (_,e)=>reject(e)));
+  });
+};
+
+export const reorderKanbanColumns = (orderedIds) => {
+  return new Promise((resolve, reject) => {
+    if(!Array.isArray(orderedIds)) return reject(new Error('array required'));
+    db.transaction(tx => {
+      orderedIds.forEach((id, idx) => {
+        tx.executeSql('UPDATE KanbanColumn SET position=? WHERE column_id=?', [idx, id]);
+      });
+    }, reject, () => resolve(true));
+  });
+};
+
+export const getKanbanTasks = () => {
+  return new Promise((resolve, reject) => {
+    db.readTransaction(tx => {
+      tx.executeSql('SELECT * FROM Task ORDER BY status, sort_order', [], (_, { rows }) => {
+        const arr=[]; for(let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr);
+      }, (_,e)=>reject(e));
+    });
+  });
+};
+
+export const updateTaskKanbanPosition = ({ taskId, status, sortOrder }) => {
+  return new Promise((resolve, reject) => {
+    if(!taskId) return reject(new Error('taskId required'));
+    const fields=[]; const vals=[];
+    if(status !== undefined){ fields.push('status=?'); vals.push(status); }
+    if(sortOrder !== undefined){ fields.push('sort_order=?'); vals.push(sortOrder); }
+    if(!fields.length) return resolve(0);
+    vals.push(taskId);
+    db.transaction(tx => {
+      tx.executeSql(`UPDATE Task SET ${fields.join(', ')}, updated_at=datetime('now') WHERE task_id=?`, vals, ()=> resolve(1), (_,e)=>reject(e));
+    });
+  });
+};
+
+export const batchUpdateKanbanPositions = (updates) => {
+  return new Promise((resolve, reject) => {
+    if(!Array.isArray(updates) || !updates.length) return resolve(0);
+    db.transaction(tx => {
+      updates.forEach(u => {
+        const { taskId, status, sortOrder } = u;
+        if(!taskId) return;
+        const parts=[]; const args=[];
+        if(status !== undefined){ parts.push('status=?'); args.push(status); }
+        if(sortOrder !== undefined){ parts.push('sort_order=?'); args.push(sortOrder); }
+        if(parts.length){ args.push(taskId); tx.executeSql(`UPDATE Task SET ${parts.join(', ')}, updated_at=datetime('now') WHERE task_id=?`, args); }
+      });
+    }, reject, () => resolve(updates.length));
+  });
+};
+
 // Internal helpers for duration recalculation & date utilities
 const recalcDuration = (tx, id) => {
   tx.executeSql(

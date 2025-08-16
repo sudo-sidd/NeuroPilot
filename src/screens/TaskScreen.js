@@ -46,9 +46,10 @@ const TaskScreen = ({ navigation }) => {
   const startDrag = (task) => (evt) => {
     setDraggingTask(task);
     setHoveredColumn(null);
-    dragStart.current = { x: evt.nativeEvent.pageX - 50, y: evt.nativeEvent.pageY - 20 }; // offset
+    const { pageX, pageY } = evt.nativeEvent;
+    dragStart.current = { x: pageX - 50, y: pageY - 20 };
     pan.setValue(dragStart.current);
-    measureColumns(); // ensure fresh layouts
+    measureColumns();
   };
 
   const updateHover = (pageX, pageY) => {
@@ -66,11 +67,12 @@ const TaskScreen = ({ navigation }) => {
   };
 
   const panResponder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => false,
+    onStartShouldSetPanResponder: () => !!draggingTask,
     onStartShouldSetPanResponderCapture: () => !!draggingTask,
     onMoveShouldSetPanResponder: () => !!draggingTask,
     onMoveShouldSetPanResponderCapture: () => !!draggingTask,
     onPanResponderMove: (e, g) => { if(draggingTask){ const x = dragStart.current.x + g.dx; const y = dragStart.current.y + g.dy; pan.setValue({ x, y }); updateHover(e.nativeEvent.pageX, e.nativeEvent.pageY); } },
+    onPanResponderTerminationRequest: () => false,
     onPanResponderRelease: (e) => finalizeDrop(e.nativeEvent.pageX, e.nativeEvent.pageY),
     onPanResponderTerminate: (e) => finalizeDrop(e.nativeEvent.pageX, e.nativeEvent.pageY)
   })).current;
@@ -104,25 +106,48 @@ const TaskScreen = ({ navigation }) => {
     }) }));
   }, [tasks, todayISO]);
 
-  const TaskCard = ({ item }) => (
-    <TouchableOpacity activeOpacity={0.8} onLongPress={startDrag(item)} style={{ opacity: draggingTask && draggingTask.task_id===item.task_id ? 0.25 : 1 }}>
-      <View style={{ backgroundColor: palette.surfaceAlt || palette.surface, borderRadius:10, padding: spacing(2), marginBottom: spacing(2), shadowColor:'#000', shadowOpacity:0.08, shadowRadius:3, elevation:1 }}>
-        <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }} numberOfLines={2}>{item.name}</Text>
-        <View style={{ flexDirection:'row', alignItems:'center', marginTop:4 }}>
-          {item.priority && <Text style={{ fontSize:11, color: palette.textLight, marginRight:6 }}>P{item.priority}</Text>}
-          {item.start_date && <Text style={{ fontSize:11, color: palette.textLight }}>{item.start_date}</Text>}
-        </View>
-        <View style={{ flexDirection:'row', marginTop: spacing(1) }}>
-          <TouchableOpacity onPress={()=> toggle(item)} style={{ paddingVertical:4, paddingHorizontal:8, borderRadius:6, backgroundColor: item.completed? palette.primary : palette.border, marginRight:6 }}>
-            <Text style={{ fontSize:11, color: item.completed? '#fff': palette.text }}>{item.completed? 'Undo':'Done'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={()=> remove(item)} style={{ paddingVertical:4, paddingHorizontal:8, borderRadius:6, backgroundColor: palette.border }}>
-            <Text style={{ fontSize:11, color: palette.text }}>Del</Text>
-          </TouchableOpacity>
+  const TaskCard = ({ item }) => {
+    const localPanResponder = useRef(PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (e, g) => {
+        if(!draggingTask && (Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6)) { startDrag(item)(e); return true; }
+        return !!draggingTask;
+      },
+      onMoveShouldSetPanResponderCapture: (e,g) => {
+        if(!draggingTask && (Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6)) { startDrag(item)(e); return true; }
+        return false;
+      },
+      onPanResponderMove: (e, g) => {
+        if(draggingTask && draggingTask.task_id === item.task_id){
+          const x = dragStart.current.x + g.dx; const y = dragStart.current.y + g.dy;
+          pan.setValue({ x, y });
+          updateHover(e.nativeEvent.pageX, e.nativeEvent.pageY);
+        }
+      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderRelease: (e) => { if(draggingTask && draggingTask.task_id === item.task_id){ finalizeDrop(e.nativeEvent.pageX, e.nativeEvent.pageY); } },
+      onPanResponderTerminate: (e) => { if(draggingTask && draggingTask.task_id === item.task_id){ finalizeDrop(e.nativeEvent.pageX, e.nativeEvent.pageY); } }
+    })).current;
+    return (
+      <View {...localPanResponder.panHandlers} style={{ opacity: draggingTask && draggingTask.task_id===item.task_id ? 0.25 : 1 }}>
+        <View style={{ backgroundColor: palette.surfaceAlt || palette.surface, borderRadius:10, padding: spacing(2), marginBottom: spacing(2), shadowColor:'#000', shadowOpacity:0.08, shadowRadius:3, elevation:1 }}>
+          <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }} numberOfLines={2}>{item.name}</Text>
+          <View style={{ flexDirection:'row', alignItems:'center', marginTop:4 }}>
+            {item.priority && <Text style={{ fontSize:11, color: palette.textLight, marginRight:6 }}>P{item.priority}</Text>}
+            {item.start_date && <Text style={{ fontSize:11, color: palette.textLight }}>{item.start_date}</Text>}
+          </View>
+          <View style={{ flexDirection:'row', marginTop: spacing(1) }}>
+            <TouchableOpacity disabled={!!draggingTask} onPress={()=> toggle(item)} style={{ paddingVertical:4, paddingHorizontal:8, borderRadius:6, backgroundColor: item.completed? palette.primary : palette.border, marginRight:6 }}>
+              <Text style={{ fontSize:11, color: item.completed? '#fff': palette.text }}>{item.completed? 'Undo':'Done'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity disabled={!!draggingTask} onPress={()=> remove(item)} style={{ paddingVertical:4, paddingHorizontal:8, borderRadius:6, backgroundColor: palette.border }}>
+              <Text style={{ fontSize:11, color: palette.text }}>Del</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </TouchableOpacity>
-  );
+    );
+  };
 
   const renderColumn = (col) => {
     const isHover = hoveredColumn === col.key;
