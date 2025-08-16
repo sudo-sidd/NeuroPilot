@@ -16,10 +16,12 @@ const TaskScreen = ({ navigation }) => {
   const [isLandscape, setIsLandscape] = useState(Dimensions.get('window').width > Dimensions.get('window').height);
   const [draggingTask, setDraggingTask] = useState(null);
   const [hoveredColumn, setHoveredColumn] = useState(null);
+  const [dragCardSize, setDragCardSize] = useState({ width: 0, height: 0 });
   const pan = useRef(new Animated.ValueXY()).current;
   const dragStart = useRef({ x:0, y:0 });
   const columnRefs = useRef({});
   const columnLayouts = useRef({});
+  const cardLayouts = useRef({}); // task_id -> { x,y,width,height }
 
   const refresh = async () => {
     const t = await getTasks({ includeCompleted: true });
@@ -43,11 +45,17 @@ const TaskScreen = ({ navigation }) => {
 
   useEffect(()=> { setTimeout(measureColumns, 300); }, [tasks, isLandscape]);
 
-  const startDrag = (task) => (evt) => {
+  const startDrag = (task) => (evtOrNative) => {
+    const ne = evtOrNative && evtOrNative.nativeEvent ? evtOrNative.nativeEvent : evtOrNative;
+    if(!ne) return;
+    const { pageX, pageY, locationX, locationY } = ne;
+    const originX = pageX - locationX;
+    const originY = pageY - locationY;
+    const layout = cardLayouts.current[task.task_id];
+    if(layout){ setDragCardSize({ width: layout.width, height: layout.height }); } else { setDragCardSize({ width: 0, height: 0 }); }
     setDraggingTask(task);
     setHoveredColumn(null);
-    const { pageX, pageY } = evt.nativeEvent;
-    dragStart.current = { x: pageX - 50, y: pageY - 20 };
+    dragStart.current = { x: originX, y: originY };
     pan.setValue(dragStart.current);
     measureColumns();
   };
@@ -89,6 +97,23 @@ const TaskScreen = ({ navigation }) => {
     try { await updateTask(task.task_id, patch); refresh(); } catch {}
   };
 
+  const getTaskColumnKey = (t) => { if(t.completed) return 'done'; if(t.start_date) return 'ongoing'; return 'todo'; };
+  const todayISOConst = () => new Date().toISOString().slice(0,10);
+  const moveForward = async (task) => {
+    const col = getTaskColumnKey(task);
+    if(col==='todo'){ await updateTask(task.task_id, { start_date: todayISOConst(), completed:0 }); }
+    else if(col==='ongoing'){ await updateTask(task.task_id, { completed:1 }); }
+    else return;
+    refresh();
+  };
+  const moveBack = async (task) => {
+    const col = getTaskColumnKey(task);
+    if(col==='ongoing'){ await updateTask(task.task_id, { start_date: null, completed:0 }); }
+    else if(col==='done'){ await updateTask(task.task_id, { completed:0, start_date: task.start_date || todayISOConst() }); }
+    else return;
+    refresh();
+  };
+
   // define todayISO once per render before columns useMemo
   const today = new Date();
   const todayISO = today.toISOString().slice(0,10);
@@ -107,45 +132,66 @@ const TaskScreen = ({ navigation }) => {
   }, [tasks, todayISO]);
 
   const TaskCard = ({ item }) => {
+    const isDragging = draggingTask && draggingTask.task_id===item.task_id;
+    const cardRef = useRef(null);
+    const startedRef = useRef(false);
+    const measureSelf = () => { if(cardRef.current && cardRef.current.measureInWindow){ cardRef.current.measureInWindow((x,y,width,height)=> { cardLayouts.current[item.task_id] = { x,y,width,height }; if(isDragging) setDragCardSize({ width, height }); }); } };
+    useEffect(()=> { setTimeout(measureSelf, 0); }, [isDragging]);
+
     const localPanResponder = useRef(PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (e, g) => {
-        if(!draggingTask && (Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6)) { startDrag(item)(e); return true; }
-        return !!draggingTask;
+      onMoveShouldSetPanResponder: (e,g) => {
+        if(!draggingTask && (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2)) { // start drag
+          startedRef.current = true;
+          startDrag(item)({ pageX: e.nativeEvent.pageX, pageY: e.nativeEvent.pageY, locationX: e.nativeEvent.locationX, locationY: e.nativeEvent.locationY });
+          return true;
+        }
+        return !!draggingTask && isDragging;
       },
-      onMoveShouldSetPanResponderCapture: (e,g) => {
-        if(!draggingTask && (Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6)) { startDrag(item)(e); return true; }
-        return false;
-      },
-      onPanResponderMove: (e, g) => {
-        if(draggingTask && draggingTask.task_id === item.task_id){
+      onMoveShouldSetPanResponderCapture: () => false,
+      onPanResponderMove: (e,g) => {
+        if(isDragging){
           const x = dragStart.current.x + g.dx; const y = dragStart.current.y + g.dy;
           pan.setValue({ x, y });
           updateHover(e.nativeEvent.pageX, e.nativeEvent.pageY);
         }
       },
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderRelease: (e) => { if(draggingTask && draggingTask.task_id === item.task_id){ finalizeDrop(e.nativeEvent.pageX, e.nativeEvent.pageY); } },
-      onPanResponderTerminate: (e) => { if(draggingTask && draggingTask.task_id === item.task_id){ finalizeDrop(e.nativeEvent.pageX, e.nativeEvent.pageY); } }
+      onPanResponderRelease: (e) => { if(isDragging){ finalizeDrop(e.nativeEvent.pageX, e.nativeEvent.pageY); } },
+      onPanResponderTerminate: (e) => { if(isDragging){ finalizeDrop(e.nativeEvent.pageX, e.nativeEvent.pageY); } },
+      onPanResponderTerminationRequest: () => false
     })).current;
+
+    const transformStyle = isDragging ? { transform:[{ translateX: Animated.subtract(pan.x, dragStart.current.x) }, { translateY: Animated.subtract(pan.y, dragStart.current.y) }], zIndex: 1000, elevation:8 } : null;
+
+    const colKey = getTaskColumnKey(item);
+    const showUp = colKey !== 'todo';
+    const showDown = colKey !== 'done';
+
     return (
-      <View {...localPanResponder.panHandlers} style={{ opacity: draggingTask && draggingTask.task_id===item.task_id ? 0.25 : 1 }}>
-        <View style={{ backgroundColor: palette.surfaceAlt || palette.surface, borderRadius:10, padding: spacing(2), marginBottom: spacing(2), shadowColor:'#000', shadowOpacity:0.08, shadowRadius:3, elevation:1 }}>
+      <Animated.View ref={cardRef} onLayout={measureSelf} {...localPanResponder.panHandlers} style={[{ marginBottom: spacing(2) }, transformStyle]}>
+        {/* Use StrictView to guarantee no raw string children slip through */}
+        <StrictView style={{ backgroundColor: palette.surfaceAlt || palette.surface, borderRadius:10, padding: spacing(2), paddingTop: spacing(2)+4, shadowColor:'#000', shadowOpacity: isDragging?0.25:0.08, shadowRadius: isDragging?6:3, elevation: isDragging?8:1 }}>
           <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }} numberOfLines={2}>{item.name}</Text>
-          <View style={{ flexDirection:'row', alignItems:'center', marginTop:4 }}>
+          <StrictView style={{ flexDirection:'row', alignItems:'center', marginTop:4 }}>
             {item.priority && <Text style={{ fontSize:11, color: palette.textLight, marginRight:6 }}>P{item.priority}</Text>}
-            {item.start_date && <Text style={{ fontSize:11, color: palette.textLight }}>{item.start_date}</Text>}
-          </View>
-          <View style={{ flexDirection:'row', marginTop: spacing(1) }}>
-            <TouchableOpacity disabled={!!draggingTask} onPress={()=> toggle(item)} style={{ paddingVertical:4, paddingHorizontal:8, borderRadius:6, backgroundColor: item.completed? palette.primary : palette.border, marginRight:6 }}>
-              <Text style={{ fontSize:11, color: item.completed? '#fff': palette.text }}>{item.completed? 'Undo':'Done'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity disabled={!!draggingTask} onPress={()=> remove(item)} style={{ paddingVertical:4, paddingHorizontal:8, borderRadius:6, backgroundColor: palette.border }}>
-              <Text style={{ fontSize:11, color: palette.text }}>Del</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+            {item.start_date && !item.completed && <Text style={{ fontSize:11, color: palette.textLight }}>{item.start_date}</Text>}
+            {item.completed && <Text style={{ fontSize:11, color: palette.primary, marginLeft:4 }}>✓</Text>}
+          </StrictView>
+          {/* Up/Down controls */}
+          <StrictView style={{ position:'absolute', top:6, right:6, flexDirection:'row' }}>
+            {showUp && (
+              <TouchableOpacity disabled={!!draggingTask} onPress={()=> moveBack(item)} style={{ backgroundColor: palette.border, paddingHorizontal:12, paddingVertical:6, borderRadius:4, marginLeft:4 }}>
+                <Text style={{ fontSize:13, color: palette.text }}>↑</Text>
+              </TouchableOpacity>
+            )}
+            {showDown && (
+              <TouchableOpacity disabled={!!draggingTask} onPress={()=> moveForward(item)} style={{ backgroundColor: palette.border, paddingHorizontal:12, paddingVertical:6, borderRadius:6, marginLeft:4 }}>
+                <Text style={{ fontSize:13, color: palette.text }}>↓</Text>
+              </TouchableOpacity>
+            )}
+          </StrictView>
+        </StrictView>
+      </Animated.View>
     );
   };
 
@@ -154,13 +200,13 @@ const TaskScreen = ({ navigation }) => {
     return (
     <View key={col.key} ref={r => { columnRefs.current[col.key]=r; }} onLayout={measureColumns} style={isLandscape ? { width:260, marginHorizontal: spacing(1) } : { width:'100%', marginVertical: spacing(1) }}>
       <Card style={{ padding: spacing(2), minHeight: 120, borderWidth: isHover? 2:1, borderColor: isHover? palette.primary : (palette.border||'#333'), backgroundColor: isHover? (palette.surfaceHover || palette.surface) : (palette.surface) }}>
-        <View style={{ flexDirection:'row', alignItems:'center' }}>
+        <StrictView style={{ flexDirection:'row', alignItems:'center' }}>
           <SectionHeader title={`${col.title} (${col.items.length})`} />
-        </View>
-        <View style={{ marginTop: spacing(1) }}>
+        </StrictView>
+        <StrictView style={{ marginTop: spacing(1) }}>
           {col.items.length === 0 && <Text style={{ fontSize:12, color: palette.textLight }}>{isHover? 'Drop here' : 'Empty'}</Text>}
           {col.items.map(t => <TaskCard key={t.task_id} item={t} />)}
-        </View>
+        </StrictView>
       </Card>
     </View>
   ); };
@@ -180,15 +226,19 @@ const TaskScreen = ({ navigation }) => {
           {columns.map(renderColumn)}
         </ScrollView>
       )}
-      {draggingTask && (
-        <Animated.View pointerEvents='none' style={{ position:'absolute', left: pan.x, top: pan.y, width: 220, zIndex:1000, opacity:0.9, transform:[{ scale:1 }] }} {...panResponder.panHandlers}>
-          <View style={{ backgroundColor: palette.surfaceAlt || palette.surface, borderRadius:10, padding: spacing(2), shadowColor:'#000', shadowOpacity:0.2, shadowRadius:6, elevation:5 }}>
-            <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }}>{draggingTask.name}</Text>
-          </View>
-        </Animated.View>
-      )}
     </SafeAreaView>
   );
+};
+
+// StrictView: defensive wrapper to ensure no raw string/number children trigger RN warning
+const StrictView = ({ children, style, ...rest }) => {
+  const normalized = React.Children.map(children, (ch, i) => {
+    if (typeof ch === 'string' || typeof ch === 'number') {
+      return <Text key={i} style={{ fontSize: 14 }}>{ch}</Text>;
+    }
+    return ch;
+  });
+  return <View style={style} {...rest}>{normalized}</View>;
 };
 
 // retain styles shell
