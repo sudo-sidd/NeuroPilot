@@ -6,6 +6,7 @@ import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DeviceEventEmitter } from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const TaskScreen = ({ navigation }) => {
   const { palette, typography, spacing } = useTheme();
@@ -89,8 +90,8 @@ const TaskScreen = ({ navigation }) => {
     const todayISO = new Date().toISOString().slice(0,10);
     let patch = {};
     switch(columnKey){
-      case 'todo': patch = { start_date: null, completed:0 }; break;
-      case 'ongoing': patch = { start_date: task.start_date || todayISO, completed:0 }; break;
+      case 'todo': patch = { startDate: null, completed:0 }; break; // use camelCase startDate for updater
+      case 'ongoing': patch = { startDate: task.start_date || todayISO, completed:0 }; break;
       case 'done': patch = { completed:1 }; break;
       default: break;
     }
@@ -101,15 +102,19 @@ const TaskScreen = ({ navigation }) => {
   const todayISOConst = () => new Date().toISOString().slice(0,10);
   const moveForward = async (task) => {
     const col = getTaskColumnKey(task);
-    if(col==='todo'){ await updateTask(task.task_id, { start_date: todayISOConst(), completed:0 }); }
+    if(col==='todo'){ await updateTask(task.task_id, { startDate: todayISOConst(), completed:0 }); }
     else if(col==='ongoing'){ await updateTask(task.task_id, { completed:1 }); }
     else return;
     refresh();
   };
   const moveBack = async (task) => {
     const col = getTaskColumnKey(task);
-    if(col==='ongoing'){ await updateTask(task.task_id, { start_date: null, completed:0 }); }
-    else if(col==='done'){ await updateTask(task.task_id, { completed:0, start_date: task.start_date || todayISOConst() }); }
+    if(col==='ongoing'){ // move back to To-Do: clear start_date
+      await updateTask(task.task_id, { startDate: null, completed:0 });
+    }
+    else if(col==='done'){ // move back to Ongoing: mark not completed but keep existing start_date (do not force new)
+      await updateTask(task.task_id, { completed:0 });
+    }
     else return;
     refresh();
   };
@@ -174,19 +179,40 @@ const TaskScreen = ({ navigation }) => {
           <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }} numberOfLines={2}>{item.name}</Text>
           <StrictView style={{ flexDirection:'row', alignItems:'center', marginTop:4 }}>
             {item.priority && <Text style={{ fontSize:11, color: palette.textLight, marginRight:6 }}>P{item.priority}</Text>}
-            {item.start_date && !item.completed && <Text style={{ fontSize:11, color: palette.textLight }}>{item.start_date}</Text>}
             {item.completed && <Text style={{ fontSize:11, color: palette.primary, marginLeft:4 }}>✓</Text>}
           </StrictView>
           {/* Up/Down controls */}
-          <StrictView style={{ position:'absolute', top:6, right:6, flexDirection:'row' }}>
+          <StrictView style={{ position:'absolute', right:6, top:0, bottom:0, justifyContent:'center', flexDirection:'row', alignItems:'center' }}>
             {showUp && (
-              <TouchableOpacity disabled={!!draggingTask} onPress={()=> moveBack(item)} style={{ backgroundColor: palette.border, paddingHorizontal:12, paddingVertical:6, borderRadius:4, marginLeft:4 }}>
-                <Text style={{ fontSize:13, color: palette.text }}>↑</Text>
+              <TouchableOpacity
+                accessibilityLabel="Move task up"
+                disabled={!!draggingTask}
+                onPress={()=> moveBack(item)}
+                style={{
+                  width:34, height:34, borderRadius:17,
+                  alignItems:'center', justifyContent:'center',
+                  marginLeft:6,
+                  backgroundColor: (palette.primary + '22'),
+                  borderWidth:1,
+                  borderColor: palette.primary,
+                  shadowColor:'#000', shadowOpacity:0.15, shadowRadius:3, shadowOffset:{ width:0, height:2 }, elevation:2
+                }}>
+                <Icon name="arrow-upward" size={20} color={palette.primary} style={{ textAlign:'center' }} />
               </TouchableOpacity>
             )}
             {showDown && (
-              <TouchableOpacity disabled={!!draggingTask} onPress={()=> moveForward(item)} style={{ backgroundColor: palette.border, paddingHorizontal:12, paddingVertical:6, borderRadius:6, marginLeft:4 }}>
-                <Text style={{ fontSize:13, color: palette.text }}>↓</Text>
+              <TouchableOpacity
+                accessibilityLabel="Move task down"
+                disabled={!!draggingTask}
+                onPress={()=> moveForward(item)}
+                style={{
+                  width:34, height:34, borderRadius:17,
+                  alignItems:'center', justifyContent:'center',
+                  marginLeft:6,
+                  backgroundColor: palette.primary,
+                  shadowColor:'#000', shadowOpacity:0.25, shadowRadius:4, shadowOffset:{ width:0, height:3 }, elevation:3
+                }}>
+                <Icon name="arrow-downward" size={20} color="#FFF" style={{ textAlign:'center' }} />
               </TouchableOpacity>
             )}
           </StrictView>
