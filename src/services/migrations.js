@@ -189,34 +189,12 @@ export const migrations = [
   {
     version: 14,
     statements: [
-      // Simple TaskClass consolidation cleanup - handles cases where migration 13 partially failed
+      // Simple cleanup migration - TaskClass should already be gone from migration 13
+      // But ensure we have all necessary indexes
       
-      // Copy any remaining TaskClass data to ActionClass (ignore duplicates and errors)
-      `INSERT OR IGNORE INTO ActionClass (name, color, emoji)
-       SELECT name, COALESCE(color, '#607D8B'), NULL 
-       FROM TaskClass 
-       WHERE NOT EXISTS (SELECT 1 FROM ActionClass ac WHERE ac.name = TaskClass.name)`,
-      
-      // Update any Tasks that still reference TaskClass
-      `UPDATE Task 
-       SET action_class_id = (
-         SELECT ac.action_class_id FROM ActionClass ac 
-         JOIN TaskClass tc ON ac.name = tc.name 
-         WHERE tc.task_class_id = Task.task_class_id
-       )
-       WHERE task_class_id IS NOT NULL AND action_class_id IS NULL`,
-      
-      // Update any RecurringTemplates that still reference TaskClass
-      `UPDATE RecurringTemplate 
-       SET action_class_id = (
-         SELECT ac.action_class_id FROM ActionClass ac 
-         JOIN TaskClass tc ON ac.name = tc.name 
-         WHERE tc.task_class_id = RecurringTemplate.task_class_id
-       )
-       WHERE task_class_id IS NOT NULL AND action_class_id IS NULL`,
-      
-      // Final cleanup - drop TaskClass
-      `DROP TABLE IF EXISTS TaskClass`
+      // Ensure we have required indexes (safe to run multiple times)
+      `CREATE INDEX IF NOT EXISTS idx_task_action_class ON Task(action_class_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_recurring_template_action_class ON RecurringTemplate(action_class_id)`
     ]
   },
   {

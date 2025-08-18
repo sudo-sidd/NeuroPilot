@@ -598,7 +598,7 @@ export const updateRecurringTemplate = (id, { name, description, patternType, pa
     if (everyOtherSeed !== undefined) { fields.push('every_other_seed = ?'); values.push(everyOtherSeed); }
     if (active !== undefined) { fields.push('active = ?'); values.push(active ? 1 : 0); }
     if (priority !== undefined) { fields.push('priority = ?'); values.push(priority); }
-    if (taskClassId !== undefined) { fields.push('task_class_id = ?'); values.push(taskClassId); }
+    if (taskClassId !== undefined) { fields.push('action_class_id = ?'); values.push(taskClassId); }
     if (!fields.length) return resolve(0);
     fields.push('updated_at = datetime("now")');
     values.push(id);
@@ -645,7 +645,7 @@ export const generateRecurringInstances = ({ daysAhead = 7 } = {}) => {
               if (existing.rows.length) return; // already generated
               // Insert with status='todo' and append sort_order for that status
               tx.executeSql(
-                `INSERT INTO Task (name, description, due_date, completed, template_id, is_generated, source_generation_date, priority, task_class_id, status, sort_order)
+                `INSERT INTO Task (name, description, due_date, completed, template_id, is_generated, source_generation_date, priority, action_class_id, status, sort_order)
                  VALUES (?, ?, ?, 0, ?, 1, ?, ?, ?, 'todo', COALESCE((SELECT MAX(sort_order)+1 FROM Task WHERE status='todo'),0))`,
                 [tpl.name, tpl.description || '', dateStr, tpl.template_id, dateStr, tpl.priority || 3, tpl.taskClassId || null],
                 () => { generated += 1; },

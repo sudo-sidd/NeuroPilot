@@ -12,6 +12,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DatePicker from 'react-native-date-picker';
 import { useTheme } from '../constants/theme';
 import { 
   getTodaysTasks,
@@ -53,6 +54,10 @@ const TaskScreen = ({ navigation }) => {
   const [newTaskDescription, setNewTaskDescription] = useState('');
   const [newTaskPriority, setNewTaskPriority] = useState(3);
   const [newTaskActionClass, setNewTaskActionClass] = useState(null);
+  const [newTaskStartDate, setNewTaskStartDate] = useState(null);
+  const [newTaskDueDate, setNewTaskDueDate] = useState(null);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showDueDatePicker, setShowDueDatePicker] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -154,19 +159,27 @@ const TaskScreen = ({ navigation }) => {
     }
 
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      await createTask({
+      const taskData = {
         name: newTaskTitle.trim(),
         description: newTaskDescription,
         priority: newTaskPriority,
         actionClassId: newTaskActionClass,
-        startDate: today, // Schedule for today by default
-      });
+        startDate: newTaskStartDate || new Date().toISOString().slice(0, 10), // Use selected date or default to today
+      };
+
+      // Add due date if provided
+      if (newTaskDueDate) {
+        taskData.dueDate = newTaskDueDate;
+      }
+
+      await createTask(taskData);
       
       setNewTaskTitle('');
       setNewTaskDescription('');
       setNewTaskPriority(3);
       setNewTaskActionClass(null);
+      setNewTaskStartDate(null);
+      setNewTaskDueDate(null);
       setShowCreateTask(false);
       loadData();
       DeviceEventEmitter.emit('tasksUpdated');
@@ -410,7 +423,7 @@ const TaskScreen = ({ navigation }) => {
 
       {/* FAB */}
       <FAB
-        icon="📝"
+        icon="+"
         label="Create Task"
         onPress={() => setShowCreateTask(true)}
         style={[styles.fab, { backgroundColor: palette.primary }]}
@@ -606,27 +619,57 @@ const TaskScreen = ({ navigation }) => {
             <View style={styles.prioritySelector}>
               {[1, 2, 3, 4].map(priority => {
                 const badge = getPriorityBadge(priority);
+                const isSelected = newTaskPriority === priority;
                 return (
                   <TouchableOpacity
                     key={priority}
                     style={[
-                      styles.priorityButton,
+                      styles.priorityChip,
                       {
-                        backgroundColor: newTaskPriority === priority ? palette.primary : palette.surface,
-                        borderColor: palette.border
+                        backgroundColor: isSelected ? palette.primary : palette.surface,
+                        borderColor: isSelected ? palette.primary : palette.border,
+                        shadowColor: isSelected ? palette.primary : 'transparent',
                       }
                     ]}
                     onPress={() => setNewTaskPriority(priority)}
+                    activeOpacity={0.7}
                   >
+                    <Text style={styles.priorityEmoji}>{badge.emoji}</Text>
                     <Text style={[
-                      styles.priorityButtonText,
-                      { color: newTaskPriority === priority ? '#fff' : palette.text }
+                      styles.priorityText,
+                      { color: isSelected ? '#fff' : palette.text }
                     ]}>
-                      {badge.emoji} {badge.text}
+                      {badge.text}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
+            </View>
+
+            <Text style={[styles.createTaskLabel, { color: palette.text }]}>Dates (Optional)</Text>
+            <View style={styles.dateRow}>
+              <View style={styles.dateField}>
+                <Text style={[styles.dateLabel, { color: palette.textLight }]}>Start Date</Text>
+                <TouchableOpacity 
+                  style={[styles.dateInput, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                  onPress={() => setShowStartDatePicker(true)}
+                >
+                  <Text style={[styles.dateText, { color: newTaskStartDate ? palette.text : palette.textLight }]}>
+                    {newTaskStartDate || 'Select date'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.dateField}>
+                <Text style={[styles.dateLabel, { color: palette.textLight }]}>Due Date</Text>
+                <TouchableOpacity 
+                  style={[styles.dateInput, { backgroundColor: palette.surface, borderColor: palette.border }]}
+                  onPress={() => setShowDueDatePicker(true)}
+                >
+                  <Text style={[styles.dateText, { color: newTaskDueDate ? palette.text : palette.textLight }]}>
+                    {newTaskDueDate || 'Select date'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <Text style={[styles.createTaskLabel, { color: palette.text }]}>Action Class</Text>
@@ -655,6 +698,36 @@ const TaskScreen = ({ navigation }) => {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Start Date Picker */}
+      <DatePicker
+        modal
+        open={showStartDatePicker}
+        date={newTaskStartDate ? new Date(newTaskStartDate) : new Date()}
+        mode="date"
+        onConfirm={(date) => {
+          setShowStartDatePicker(false);
+          setNewTaskStartDate(date.toISOString().slice(0, 10));
+        }}
+        onCancel={() => {
+          setShowStartDatePicker(false);
+        }}
+      />
+
+      {/* Due Date Picker */}
+      <DatePicker
+        modal
+        open={showDueDatePicker}
+        date={newTaskDueDate ? new Date(newTaskDueDate) : new Date()}
+        mode="date"
+        onConfirm={(date) => {
+          setShowDueDatePicker(false);
+          setNewTaskDueDate(date.toISOString().slice(0, 10));
+        }}
+        onCancel={() => {
+          setShowDueDatePicker(false);
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -928,20 +1001,55 @@ const styles = StyleSheet.create({
   },
   prioritySelector: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+    gap: 12,
+    marginBottom: 20,
   },
-  priorityButton: {
+  priorityChip: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 56,
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  priorityEmoji: {
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  priorityText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  dateRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  dateField: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 6,
+  },
+  dateInput: {
+    paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
   },
-  priorityButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
+  dateText: {
+    fontSize: 14,
   },
   classSelector: {
     marginBottom: 16,
