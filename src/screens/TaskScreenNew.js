@@ -34,7 +34,8 @@ import { DeviceEventEmitter } from 'react-native';
 const { width } = Dimensions.get('window');
 
 const TaskScreen = ({ navigation }) => {
-  const { palette, spacing } = useTheme();
+  const theme = useTheme();
+  const { palette, spacing, typography } = theme;
   const [todaysTasks, setTodaysTasks] = useState([]);
   const [unscheduledTasks, setUnscheduledTasks] = useState([]);
   const [completedTasks, setCompletedTasks] = useState([]);
@@ -308,15 +309,10 @@ const TaskScreen = ({ navigation }) => {
   const hasNoTasks = todaysTasks.length === 0;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]}>
-      {/* Top Bar */}
-      <View style={[styles.topBar, { backgroundColor: palette.surface, borderBottomColor: palette.border }]}>
-        <Text style={[styles.dateText, { color: palette.textLight }]}>
-          {formatDate()}
-        </Text>
-        <Text style={[styles.titleText, { color: palette.text }]}>
-          Tasks
-        </Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.background }]} edges={['top']}>
+      {/* Header */}
+      <View style={{ paddingHorizontal: spacing(4), paddingTop: spacing(4), flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={{ ...typography.h1, color: palette.text }}>Tasks</Text>
         <TouchableOpacity
           onPress={() => setShowDrawer(true)}
           style={styles.drawerButton}
@@ -343,15 +339,6 @@ const TaskScreen = ({ navigation }) => {
             </Text>
             
             <View style={styles.emptyActions}>
-              <TouchableOpacity
-                style={[styles.emptyButton, { backgroundColor: palette.primary }]}
-                onPress={() => setShowCreateTask(true)}
-              >
-                <Text style={[styles.emptyButtonText, { color: '#fff' }]}>
-                  Create New
-                </Text>
-              </TouchableOpacity>
-              
               {unscheduledTasks.length > 0 && (
                 <TouchableOpacity
                   style={[styles.emptyButton, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1 }]}
@@ -423,6 +410,8 @@ const TaskScreen = ({ navigation }) => {
 
       {/* FAB */}
       <FAB
+        icon="📝"
+        label="Create Task"
         onPress={() => setShowCreateTask(true)}
         style={[styles.fab, { backgroundColor: palette.primary }]}
       />
@@ -674,24 +663,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  dateText: {
-    fontSize: 14,
-    flex: 1,
-  },
-  titleText: {
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-    flex: 1,
-  },
   drawerButton: {
     width: 32,
     height: 32,
@@ -819,7 +790,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 16,
+    bottom: 32,
     right: 16,
   },
   drawer: {

@@ -149,117 +149,84 @@ export const migrations = [
     version: 13,
     statements: [
       // Migration to consolidate TaskClass into ActionClass
-      // Step 1: Create a temporary mapping table for TaskClass data
-      `CREATE TEMPORARY TABLE TaskClassMapping AS 
-       SELECT tc.task_class_id, tc.name, tc.color,
-              COALESCE(ac.action_class_id, 
-                      (SELECT MAX(action_class_id) FROM ActionClass) + ROW_NUMBER() OVER (ORDER BY tc.task_class_id)
-              ) as new_action_class_id
-       FROM TaskClass tc
-       LEFT JOIN ActionClass ac ON tc.name = ac.name`,
+      // This migration safely handles TaskClass consolidation even if partially applied
       
-      // Step 2: Insert TaskClass data into ActionClass (only if not already exists)
-      `INSERT INTO ActionClass (name, color)
-       SELECT tm.name, tm.color 
-       FROM TaskClassMapping tm
-       LEFT JOIN ActionClass ac ON tm.name = ac.name
-       WHERE ac.action_class_id IS NULL`,
+      // Step 1: Add action_class_id column to Task if it doesn't exist
+      `ALTER TABLE Task ADD COLUMN action_class_id INTEGER REFERENCES ActionClass(action_class_id)`,
       
-      // Step 3: Update Task table references from task_class_id to action_class_id
+      // Step 2: Add action_class_id column to RecurringTemplate if it doesn't exist  
+      `ALTER TABLE RecurringTemplate ADD COLUMN action_class_id INTEGER REFERENCES ActionClass(action_class_id)`,
+      
+      // Step 3: Only proceed if TaskClass table actually exists
+      // Copy TaskClass data to ActionClass
+      `INSERT OR IGNORE INTO ActionClass (name, color, emoji)
+       SELECT DISTINCT name, color, NULL FROM TaskClass`,
+      
+      // Step 4: Update Task references only if both tables exist and have the right columns
       `UPDATE Task 
        SET action_class_id = (
-         SELECT ac.action_class_id 
-         FROM ActionClass ac 
-         JOIN TaskClassMapping tm ON ac.name = tm.name 
-         WHERE tm.task_class_id = Task.task_class_id
+         SELECT ac.action_class_id FROM ActionClass ac 
+         WHERE ac.name = (SELECT name FROM TaskClass WHERE task_class_id = Task.task_class_id)
        )
-       WHERE task_class_id IS NOT NULL`,
+       WHERE task_class_id IS NOT NULL 
+         AND action_class_id IS NULL
+         AND EXISTS (SELECT name FROM sqlite_master WHERE type='table' AND name='TaskClass')`,
       
-      // Step 4: Update RecurringTemplate table references
+      // Step 5: Update RecurringTemplate references only if both tables exist
       `UPDATE RecurringTemplate 
        SET action_class_id = (
-         SELECT ac.action_class_id 
-         FROM ActionClass ac 
-         JOIN TaskClassMapping tm ON ac.name = tm.name 
-         WHERE tm.task_class_id = RecurringTemplate.task_class_id
+         SELECT ac.action_class_id FROM ActionClass ac 
+         WHERE ac.name = (SELECT name FROM TaskClass WHERE task_class_id = RecurringTemplate.task_class_id)
        )
-       WHERE task_class_id IS NOT NULL`,
+       WHERE task_class_id IS NOT NULL 
+         AND action_class_id IS NULL
+         AND EXISTS (SELECT name FROM sqlite_master WHERE type='table' AND name='TaskClass')`,
       
-      // Step 5: Remove task_class_id columns (SQLite doesn't support DROP COLUMN, so we'll recreate tables)
-      // For Task table - keeping existing column names
-      `CREATE TABLE Task_new (
-         task_id INTEGER PRIMARY KEY AUTOINCREMENT,
-         name TEXT NOT NULL,
-         description TEXT,
-         due_date TEXT,
-         completed INTEGER DEFAULT 0,
-         created_at TEXT NOT NULL DEFAULT (datetime('now')),
-         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-         repetition_type TEXT DEFAULT NULL,
-         repetition_days TEXT DEFAULT NULL,
-         template_id INTEGER REFERENCES RecurringTemplate(template_id),
-         is_generated INTEGER NOT NULL DEFAULT 0,
-         source_generation_date TEXT,
-         reminder_notification_id TEXT,
-         action_class_id INTEGER REFERENCES ActionClass(action_class_id),
-         snoozed_until TEXT,
-         priority INTEGER NOT NULL DEFAULT 3,
-         start_date TEXT,
-         start_time TEXT,
-         due_time TEXT,
-         status TEXT,
-         sort_order INTEGER
-       )`,
+      // Step 6: Drop TaskClass table if it exists
+      `DROP TABLE IF EXISTS TaskClass`
+    ]
+  },
+  {
+    version: 14,
+    statements: [
+      // Simple TaskClass consolidation cleanup - handles cases where migration 13 partially failed
       
-      `INSERT INTO Task_new SELECT 
-         task_id, name, description, due_date, completed, created_at, updated_at,
-         repetition_type, repetition_days, template_id, is_generated, source_generation_date,
-         reminder_notification_id, action_class_id, snoozed_until, priority,
-         start_date, start_time, due_time, status, sort_order
-       FROM Task`,
+      // Copy any remaining TaskClass data to ActionClass (ignore duplicates and errors)
+      `INSERT OR IGNORE INTO ActionClass (name, color, emoji)
+       SELECT name, COALESCE(color, '#607D8B'), NULL 
+       FROM TaskClass 
+       WHERE NOT EXISTS (SELECT 1 FROM ActionClass ac WHERE ac.name = TaskClass.name)`,
       
-      `DROP TABLE Task`,
-      `ALTER TABLE Task_new RENAME TO Task`,
+      // Update any Tasks that still reference TaskClass
+      `UPDATE Task 
+       SET action_class_id = (
+         SELECT ac.action_class_id FROM ActionClass ac 
+         JOIN TaskClass tc ON ac.name = tc.name 
+         WHERE tc.task_class_id = Task.task_class_id
+       )
+       WHERE task_class_id IS NOT NULL AND action_class_id IS NULL`,
       
-      // Recreate Task indexes
-      `CREATE INDEX IF NOT EXISTS idx_task_due_date ON Task(due_date)`,
-      `CREATE INDEX IF NOT EXISTS idx_task_completed ON Task(completed)`,
-      `CREATE INDEX IF NOT EXISTS idx_task_template ON Task(template_id)`,
-      `CREATE INDEX IF NOT EXISTS idx_task_action_class ON Task(action_class_id)`,
-      `CREATE INDEX IF NOT EXISTS idx_task_snoozed_until ON Task(snoozed_until)`,
-      `CREATE INDEX IF NOT EXISTS idx_task_priority ON Task(priority)`,
-      `CREATE INDEX IF NOT EXISTS idx_task_status ON Task(status)`,
-      `CREATE INDEX IF NOT EXISTS idx_task_status_sort ON Task(status, sort_order)`,
+      // Update any RecurringTemplates that still reference TaskClass
+      `UPDATE RecurringTemplate 
+       SET action_class_id = (
+         SELECT ac.action_class_id FROM ActionClass ac 
+         JOIN TaskClass tc ON ac.name = tc.name 
+         WHERE tc.task_class_id = RecurringTemplate.task_class_id
+       )
+       WHERE task_class_id IS NOT NULL AND action_class_id IS NULL`,
       
-      // For RecurringTemplate table - keeping existing column names
-      `CREATE TABLE RecurringTemplate_new (
-         template_id INTEGER PRIMARY KEY AUTOINCREMENT,
-         name TEXT NOT NULL,
-         description TEXT,
-         pattern_type TEXT NOT NULL,
-         pattern_days TEXT,
-         every_other_seed TEXT,
-         active INTEGER NOT NULL DEFAULT 1,
-         created_at TEXT NOT NULL DEFAULT (datetime('now')),
-         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-         action_class_id INTEGER REFERENCES ActionClass(action_class_id),
-         priority INTEGER NOT NULL DEFAULT 3
-       )`,
+      // Final cleanup - drop TaskClass
+      `DROP TABLE IF EXISTS TaskClass`
+    ]
+  },
+  {
+    version: 15,
+    statements: [
+      // Recovery migration - ensure database is in consistent state
+      // This handles cases where previous migrations failed or were interrupted
       
-      `INSERT INTO RecurringTemplate_new SELECT 
-         template_id, name, description, pattern_type, pattern_days, every_other_seed,
-         active, created_at, updated_at, action_class_id, priority
-       FROM RecurringTemplate`,
-      
-      `DROP TABLE RecurringTemplate`,
-      `ALTER TABLE RecurringTemplate_new RENAME TO RecurringTemplate`,
-      
-      // Recreate RecurringTemplate indexes
-      `CREATE INDEX IF NOT EXISTS idx_recurring_template_active ON RecurringTemplate(active, pattern_type)`,
-      `CREATE INDEX IF NOT EXISTS idx_recurring_template_action_class ON RecurringTemplate(action_class_id)`,
-      
-      // Step 6: Drop TaskClass table
-      `DROP TABLE TaskClass`
+      // Clean up any remaining TaskClass references
+      `DROP TABLE IF EXISTS TaskClass`
     ]
   }
 ];

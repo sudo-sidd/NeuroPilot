@@ -43,23 +43,16 @@ const RootInner = () => {
   const navigateSafe = (name, params) => { try { navRef.navigate(name, params || undefined); } catch {} };
 
   const onFabPress = () => {
-    if (current.includes('Activity')) {
-      if (currentActivity) {
-        // Stop running activity
-        stopCurrentActivity().then(() => {
-          setCurrentActivity(null);
-          DeviceEventEmitter.emit('activityUpdated');
-          navRef.navigate('ActivityTab', { ts: Date.now() });
-        }).catch(()=>{});
-      } else {
-        setActivityModal(true);
-      }
+    if (currentActivity) {
+      // Stop running activity
+      stopCurrentActivity().then(() => {
+        setCurrentActivity(null);
+        DeviceEventEmitter.emit('activityUpdated');
+        navRef.navigate('ActivityTab', { ts: Date.now() });
+      }).catch(()=>{});
+    } else {
+      setActivityModal(true);
     }
-    else if (current.includes('Tasks')) { setTaskModal(true); }
-    else if (current.includes('Journal')) { // jump to today (already default) maybe scroll later
-      // no modal; journal action could be add quick note later. For now ensure we are on Journal.
-      navRef.navigate('JournalTab');
-    } else if (current.includes('Reports')) { setReportModal(true); }
   };
 
   const submitActivity = async () => {
@@ -81,8 +74,8 @@ const RootInner = () => {
   }, []);
   const chooseReport = (start) => { setReportModal(false); navigateSafe('ReportsTab', { start }); };
 
-  // Show FAB only on Activity & Tasks tabs. Need current route early.
-  const fabHidden = !current || !(current.includes('Activity') || current.includes('Tasks'));
+  // Show FAB only on Activity tab. Tasks tab has its own integrated FAB.
+  const fabHidden = !current || !current.includes('Activity');
 
   // If current not yet set shortly after mount, attempt to grab it.
   useEffect(() => {
@@ -104,7 +97,7 @@ const RootInner = () => {
       <AppNavigator />
       {!fabHidden && (
         <FAB
-          icon={current.includes('Activity') ? (currentActivity ? '■' : '▶') : current.includes('Tasks') ? '＋' : '＋'}
+          icon={currentActivity ? '■' : '▶'}
           label="primary action"
           onPress={onFabPress}
         />

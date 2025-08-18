@@ -21,9 +21,16 @@ const applyMigrations = () => {
       db.transaction(mtx => {
         pending.forEach(m => {
           m.statements.forEach(stmt => {
-            mtx.executeSql(stmt, [], () => {}, err => console.log('Migration stmt failed', m.version, err));
+            mtx.executeSql(stmt, [], () => {}, err => {
+              console.log('Migration stmt failed', m.version, err);
+              console.log('Failed statement:', stmt.substring(0, 200) + '...');
+              // Continue with other statements even if one fails
+            });
           });
-          mtx.executeSql('INSERT INTO SchemaVersion (version) VALUES (?)', [m.version]);
+          mtx.executeSql('INSERT INTO SchemaVersion (version) VALUES (?)', [m.version], 
+            () => console.log(`Migration ${m.version} completed`),
+            err => console.log(`Failed to record migration ${m.version}:`, err)
+          );
         });
       });
     });
