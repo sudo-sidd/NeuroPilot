@@ -215,6 +215,221 @@ export const deleteActionClass = (id) => {
 };
 
 // Phase 3 Task helpers
+
+// Enhanced task lifecycle management functions
+export const getTodaysTasks = () => {
+  return new Promise((resolve, reject) => {
+    const today = new Date().toISOString().slice(0, 10);
+    db.readTransaction(tx => {
+      tx.executeSql(`
+        SELECT t.*, ac.name as action_class_name, ac.color as action_class_color
+        FROM Task t
+        LEFT JOIN ActionClass ac ON t.action_class_id = ac.action_class_id
+        WHERE (t.due_date = ? OR t.start_date = ? OR t.status IN ('in_progress', 'ongoing'))
+        AND t.completed = 0
+        ORDER BY 
+          CASE t.status 
+            WHEN 'in_progress' THEN 1
+            WHEN 'ongoing' THEN 1  
+            WHEN 'todo' THEN 2
+            ELSE 3
+          END,
+          t.priority DESC,
+          t.created_at ASC
+      `, [today, today], (_, { rows }) => {
+        const tasks = [];
+        for (let i = 0; i < rows.length; i++) {
+          tasks.push(rows.item(i));
+        }
+        resolve(tasks);
+      }, (_, e) => reject(e));
+    });
+  });
+};
+
+export const getTasksByStatus = (status) => {
+  return new Promise((resolve, reject) => {
+    db.readTransaction(tx => {
+      tx.executeSql(`
+        SELECT t.*, ac.name as action_class_name, ac.color as action_class_color
+        FROM Task t
+        LEFT JOIN ActionClass ac ON t.action_class_id = ac.action_class_id
+        WHERE t.status = ?
+        ORDER BY t.updated_at DESC
+      `, [status], (_, { rows }) => {
+        const tasks = [];
+        for (let i = 0; i < rows.length; i++) {
+          tasks.push(rows.item(i));
+        }
+        resolve(tasks);
+      }, (_, e) => reject(e));
+    });
+  });
+};
+
+export const startTask = (taskId) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      // First check if there are already 2 ongoing tasks
+      tx.executeSql(
+        "SELECT COUNT(*) as count FROM Task WHERE status IN ('in_progress', 'ongoing')",
+        [],
+        (_, { rows }) => {
+          if (rows.item(0).count >= 2) {
+            reject(new Error('Maximum 2 ongoing tasks allowed. Pause one to start this task.'));
+            return;
+          }
+          
+          // Start the task
+          const now = new Date().toISOString();
+          tx.executeSql(
+            `UPDATE Task SET 
+             status = 'in_progress',
+             start_date = COALESCE(start_date, ?),
+             start_time = COALESCE(start_time, ?),
+             updated_at = ?
+             WHERE task_id = ?`,
+            [now.slice(0, 10), now.slice(11, 19), now, taskId],
+            (_, result) => {
+              if (result.rowsAffected > 0) {
+                resolve({ success: true, startedAt: now });
+              } else {
+                reject(new Error('Task not found'));
+              }
+            },
+            (_, error) => reject(error)
+          );
+        },
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+export const pauseTask = (taskId) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      const now = new Date().toISOString();
+      tx.executeSql(
+        `UPDATE Task SET 
+         status = 'todo',
+         updated_at = ?
+         WHERE task_id = ?`,
+        [now, taskId],
+        (_, result) => {
+          if (result.rowsAffected > 0) {
+            resolve({ success: true, pausedAt: now });
+          } else {
+            reject(new Error('Task not found'));
+          }
+        },
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+export const completeTask = (taskId) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      const now = new Date().toISOString();
+      tx.executeSql(
+        `UPDATE Task SET 
+         status = 'done',
+         completed = 1,
+         due_time = COALESCE(due_time, ?),
+         updated_at = ?
+         WHERE task_id = ?`,
+        [now.slice(11, 19), now, taskId],
+        (_, result) => {
+          if (result.rowsAffected > 0) {
+            resolve({ success: true, completedAt: now });
+          } else {
+            reject(new Error('Task not found'));
+          }
+        },
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+export const getUnscheduledTasks = () => {
+  return new Promise((resolve, reject) => {
+    db.readTransaction(tx => {
+      tx.executeSql(`
+        SELECT t.*, ac.name as action_class_name, ac.color as action_class_color
+        FROM Task t
+        LEFT JOIN ActionClass ac ON t.action_class_id = ac.action_class_id
+        WHERE (t.due_date IS NULL OR t.due_date = '') 
+        AND (t.start_date IS NULL OR t.start_date = '')
+        AND t.completed = 0
+        AND t.status NOT IN ('done')
+        ORDER BY t.created_at DESC
+      `, [], (_, { rows }) => {
+        const tasks = [];
+        for (let i = 0; i < rows.length; i++) {
+          tasks.push(rows.item(i));
+        }
+        resolve(tasks);
+      }, (_, e) => reject(e));
+    });
+  });
+};
+
+export const getCompletedTasks = (limit = 50) => {
+  return new Promise((resolve, reject) => {
+    db.readTransaction(tx => {
+      tx.executeSql(`
+        SELECT t.*, ac.name as action_class_name, ac.color as action_class_color
+        FROM Task t
+        LEFT JOIN ActionClass ac ON t.action_class_id = ac.action_class_id
+        WHERE t.completed = 1 OR t.status = 'done'
+        ORDER BY t.updated_at DESC
+        LIMIT ?
+      `, [limit], (_, { rows }) => {
+        const tasks = [];
+        for (let i = 0; i < rows.length; i++) {
+          tasks.push(rows.item(i));
+        }
+        resolve(tasks);
+      }, (_, e) => reject(e));
+    });
+  });
+};
+
+export const updateTaskSchedule = (taskId, { scheduledStart, scheduledEnd }) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      const now = new Date().toISOString();
+      tx.executeSql(
+        `UPDATE Task SET 
+         start_date = ?,
+         start_time = ?,
+         due_date = ?,
+         due_time = ?,
+         updated_at = ?
+         WHERE task_id = ?`,
+        [
+          scheduledStart?.slice(0, 10) || null,
+          scheduledStart?.slice(11, 19) || null,
+          scheduledEnd?.slice(0, 10) || null,
+          scheduledEnd?.slice(11, 19) || null,
+          now,
+          taskId
+        ],
+        (_, result) => {
+          if (result.rowsAffected > 0) {
+            resolve({ success: true });
+          } else {
+            reject(new Error('Task not found'));
+          }
+        },
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
 export const createTask = ({ name, description = '', dueDate = null, repetitionType = null, repetitionDays = null, reminderTime = null, priority = 3, actionClassId = null, startDate = null, startTime = null, dueTime = null }) => {
   return new Promise((resolve, reject) => {
     if (!name || !name.trim()) return reject(new Error('Task name required'));

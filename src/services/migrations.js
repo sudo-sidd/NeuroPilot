@@ -186,18 +186,23 @@ export const migrations = [
        WHERE task_class_id IS NOT NULL`,
       
       // Step 5: Remove task_class_id columns (SQLite doesn't support DROP COLUMN, so we'll recreate tables)
-      // For Task table
+      // For Task table - keeping existing column names
       `CREATE TABLE Task_new (
          task_id INTEGER PRIMARY KEY AUTOINCREMENT,
-         title TEXT NOT NULL,
+         name TEXT NOT NULL,
          description TEXT,
          due_date TEXT,
          completed INTEGER DEFAULT 0,
-         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-         recurring_template_id INTEGER REFERENCES RecurringTemplate(recurring_template_id),
+         created_at TEXT NOT NULL DEFAULT (datetime('now')),
+         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+         repetition_type TEXT DEFAULT NULL,
+         repetition_days TEXT DEFAULT NULL,
+         template_id INTEGER REFERENCES RecurringTemplate(template_id),
+         is_generated INTEGER NOT NULL DEFAULT 0,
+         source_generation_date TEXT,
+         reminder_notification_id TEXT,
          action_class_id INTEGER REFERENCES ActionClass(action_class_id),
-         snoozed_until DATETIME,
+         snoozed_until TEXT,
          priority INTEGER NOT NULL DEFAULT 3,
          start_date TEXT,
          start_time TEXT,
@@ -207,8 +212,9 @@ export const migrations = [
        )`,
       
       `INSERT INTO Task_new SELECT 
-         task_id, title, description, due_date, completed, created_at, updated_at,
-         recurring_template_id, action_class_id, snoozed_until, priority,
+         task_id, name, description, due_date, completed, created_at, updated_at,
+         repetition_type, repetition_days, template_id, is_generated, source_generation_date,
+         reminder_notification_id, action_class_id, snoozed_until, priority,
          start_date, start_time, due_time, status, sort_order
        FROM Task`,
       
@@ -218,41 +224,38 @@ export const migrations = [
       // Recreate Task indexes
       `CREATE INDEX IF NOT EXISTS idx_task_due_date ON Task(due_date)`,
       `CREATE INDEX IF NOT EXISTS idx_task_completed ON Task(completed)`,
-      `CREATE INDEX IF NOT EXISTS idx_task_recurring_template ON Task(recurring_template_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_task_template ON Task(template_id)`,
       `CREATE INDEX IF NOT EXISTS idx_task_action_class ON Task(action_class_id)`,
       `CREATE INDEX IF NOT EXISTS idx_task_snoozed_until ON Task(snoozed_until)`,
       `CREATE INDEX IF NOT EXISTS idx_task_priority ON Task(priority)`,
       `CREATE INDEX IF NOT EXISTS idx_task_status ON Task(status)`,
       `CREATE INDEX IF NOT EXISTS idx_task_status_sort ON Task(status, sort_order)`,
       
-      // For RecurringTemplate table
+      // For RecurringTemplate table - keeping existing column names
       `CREATE TABLE RecurringTemplate_new (
-         recurring_template_id INTEGER PRIMARY KEY AUTOINCREMENT,
-         title TEXT NOT NULL,
+         template_id INTEGER PRIMARY KEY AUTOINCREMENT,
+         name TEXT NOT NULL,
          description TEXT,
-         frequency TEXT NOT NULL,
-         interval_value INTEGER NOT NULL DEFAULT 1,
-         days_of_week TEXT,
-         day_of_month INTEGER,
-         is_active INTEGER DEFAULT 1,
-         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+         pattern_type TEXT NOT NULL,
+         pattern_days TEXT,
+         every_other_seed TEXT,
+         active INTEGER NOT NULL DEFAULT 1,
+         created_at TEXT NOT NULL DEFAULT (datetime('now')),
+         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
          action_class_id INTEGER REFERENCES ActionClass(action_class_id),
          priority INTEGER NOT NULL DEFAULT 3
        )`,
       
       `INSERT INTO RecurringTemplate_new SELECT 
-         recurring_template_id, title, description, frequency, interval_value,
-         days_of_week, day_of_month, is_active, created_at, updated_at,
-         action_class_id, priority
+         template_id, name, description, pattern_type, pattern_days, every_other_seed,
+         active, created_at, updated_at, action_class_id, priority
        FROM RecurringTemplate`,
       
       `DROP TABLE RecurringTemplate`,
       `ALTER TABLE RecurringTemplate_new RENAME TO RecurringTemplate`,
       
       // Recreate RecurringTemplate indexes
-      `CREATE INDEX IF NOT EXISTS idx_recurring_template_active ON RecurringTemplate(is_active)`,
-      `CREATE INDEX IF NOT EXISTS idx_recurring_template_frequency ON RecurringTemplate(frequency)`,
+      `CREATE INDEX IF NOT EXISTS idx_recurring_template_active ON RecurringTemplate(active, pattern_type)`,
       `CREATE INDEX IF NOT EXISTS idx_recurring_template_action_class ON RecurringTemplate(action_class_id)`,
       
       // Step 6: Drop TaskClass table
