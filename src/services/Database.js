@@ -379,44 +379,146 @@ export const getTasks = ({ includeCompleted = true } = {}) => {
   });
 };
 
-// NOTE: repetition_type / repetition_days are deprecated (Phase 8). Will be removed after template model stabilizes.
-export const generateRecurringTasks = () => {
+// Legacy recurring task generator retained but disabled (no longer exported for use)
+// export const generateRecurringTasks = () => { /* deprecated */ };
+
+// Phase 8 Recurring Template Helpers
+export const createRecurringTemplate = ({ name, description = '', patternType, patternDays = '', everyOtherSeed = null, priority = 3, taskClassId = null }) => {
   return new Promise((resolve, reject) => {
-    const today = new Date();
-    const todayWeekday = today.getDay(); // 0=Sunday
-    const todayISO = today.toISOString().slice(0,10);
+    if (!name || !name.trim()) return reject(new Error('Name required'));
+    if (!patternType) return reject(new Error('patternType required'));
+    if (!['daily', 'every_other_day', 'weekdays'].includes(patternType)) return reject(new Error('Invalid patternType'));
+    if (patternType === 'weekdays') {
+      const days = (patternDays || '').split(',').map(d => d.trim()).filter(Boolean);
+      const valid = days.every(d => /^([0-6])$/.test(d));
+      if (!days.length || !valid) return reject(new Error('Invalid patternDays'));
+      patternDays = days.join(',');
+    } else {
+      patternDays = null;
+    }
+    if (patternType === 'every_other_day' && !everyOtherSeed) {
+      everyOtherSeed = new Date().toISOString().slice(0,10);
+    }
     db.transaction(tx => {
       tx.executeSql(
-        `SELECT * FROM Task WHERE repetition_type IS NOT NULL`,
-        [],
-        (_, { rows }) => {
-          const inserts = [];
-          for (let i = 0; i < rows.length; i++) {
-            const t = rows.item(i);
-            if (t.repetition_type === 'daily') {
-              if (!t.due_date || t.due_date !== todayISO) {
-                inserts.push([t.name, t.description, todayISO, t.repetition_type, t.repetition_days]);
-              }
-            } else if (t.repetition_type === 'weekdays') {
-              const days = (t.repetition_days || '').split(',').map(x => x.trim()).filter(Boolean);
-              if (days.includes(String(todayWeekday))) {
-                if (!t.due_date || t.due_date !== todayISO) {
-                  inserts.push([t.name, t.description, todayISO, t.repetition_type, t.repetition_days]);
-                }
-              }
-            }
-          }
-          if (!inserts.length) return resolve(0);
-          inserts.forEach(vals => {
-            tx.executeSql(
-              'INSERT INTO Task (name, description, due_date, repetition_type, repetition_days) VALUES (?, ?, ?, ?, ?)',
-              vals
-            );
-          });
-          resolve(inserts.length);
-        },
+        'INSERT INTO RecurringTemplate (name, description, pattern_type, pattern_days, every_other_seed, priority, task_class_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [name.trim(), description, patternType, patternDays, everyOtherSeed, priority, taskClassId],
+        (_, result) => resolve(result.insertId),
         (_, error) => reject(error)
       );
+    });
+  });
+};
+
+export const updateRecurringTemplate = (id, { name, description, patternType, patternDays, everyOtherSeed, active, priority, taskClassId }) => {
+  return new Promise((resolve, reject) => {
+    if (!id) return reject(new Error('ID required'));
+    const fields = [];
+    const values = [];
+    if (name !== undefined) { fields.push('name = ?'); values.push(name.trim()); }
+    if (description !== undefined) { fields.push('description = ?'); values.push(description); }
+    if (patternType !== undefined) {
+      if (!['daily', 'every_other_day', 'weekdays'].includes(patternType)) return reject(new Error('Invalid patternType'));
+      fields.push('pattern_type = ?'); values.push(patternType);
+    }
+    if (patternDays !== undefined) {
+      if (patternDays) {
+        const days = patternDays.split(',').map(d => d.trim()).filter(Boolean);
+        const valid = days.every(d => /^([0-6])$/.test(d));
+        if (!valid) return reject(new Error('Invalid patternDays'));
+        fields.push('pattern_days = ?'); values.push(days.join(','));
+      } else {
+        fields.push('pattern_days = NULL');
+      }
+    }
+    if (everyOtherSeed !== undefined) { fields.push('every_other_seed = ?'); values.push(everyOtherSeed); }
+    if (active !== undefined) { fields.push('active = ?'); values.push(active ? 1 : 0); }
+    if (priority !== undefined) { fields.push('priority = ?'); values.push(priority); }
+    if (taskClassId !== undefined) { fields.push('task_class_id = ?'); values.push(taskClassId); }
+    if (!fields.length) return resolve(0);
+    fields.push('updated_at = datetime("now")');
+    values.push(id);
+    db.transaction(tx => {
+      tx.executeSql(
+        `UPDATE RecurringTemplate SET ${fields.join(', ')} WHERE template_id = ?`,
+        values,
+        (_, result) => resolve(result.rowsAffected),
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+export const listRecurringTemplates = () => {
+  return new Promise((resolve, reject) => {
+    db.readTransaction(tx => {
+      tx.executeSql('SELECT * FROM RecurringTemplate WHERE active = 1 ORDER BY created_at DESC', [], (_, { rows }) => {
+        const arr = []; for (let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr);
+      }, (_, e) => reject(e));
+    });
+  });
+};
+
+export const deactivateRecurringTemplate = (id) => updateRecurringTemplate(id, { active: 0 });
+
+export const generateRecurringInstances = ({ daysAhead = 7 } = {}) => {
+  return new Promise((resolve, reject) => {
+    const today = new Date();
+    const startISO = today.toISOString().slice(0,10);
+    const end = new Date(today); end.setDate(end.getDate() + daysAhead);
+    const endISO = end.toISOString().slice(0,10);
+
+    db.transaction(tx => {
+      tx.executeSql('SELECT * FROM RecurringTemplate WHERE active = 1', [], (_, { rows }) => {
+        let generated = 0;
+        const templates = []; for (let i=0;i<rows.length;i++) templates.push(rows.item(i));
+
+        const ensureForDate = (tpl, dateStr) => {
+          tx.executeSql(
+            'SELECT 1 FROM Task WHERE template_id = ? AND due_date = ? LIMIT 1',
+            [tpl.template_id, dateStr],
+            (_, existing) => {
+              if (existing.rows.length) return; // already generated
+              // Insert with status='todo' and append sort_order for that status
+              tx.executeSql(
+                `INSERT INTO Task (name, description, due_date, completed, template_id, is_generated, source_generation_date, priority, task_class_id, status, sort_order)
+                 VALUES (?, ?, ?, 0, ?, 1, ?, ?, ?, 'todo', COALESCE((SELECT MAX(sort_order)+1 FROM Task WHERE status='todo'),0))`,
+                [tpl.name, tpl.description || '', dateStr, tpl.template_id, dateStr, tpl.priority || 3, tpl.taskClassId || null],
+                () => { generated += 1; },
+                () => {}
+              );
+            }
+          );
+        };
+
+        templates.forEach(tpl => {
+          if (tpl.pattern_type === 'daily') {
+            let d = new Date(startISO + 'T00:00:00Z');
+            const endD = new Date(endISO + 'T00:00:00Z');
+            while (d <= endD) { ensureForDate(tpl, d.toISOString().slice(0,10)); d.setUTCDate(d.getUTCDate()+1); }
+          } else if (tpl.pattern_type === 'weekdays') {
+            const days = (tpl.pattern_days || '').split(',').map(x => x.trim()).filter(Boolean);
+            let d = new Date(startISO + 'T00:00:00Z');
+            const endD = new Date(endISO + 'T00:00:00Z');
+            while (d <= endD) {
+              const wd = d.getUTCDay();
+              if (days.includes(String(wd))) ensureForDate(tpl, d.toISOString().slice(0,10));
+              d.setUTCDate(d.getUTCDate()+1);
+            }
+          } else if (tpl.pattern_type === 'every_other_day') {
+            const seed = tpl.every_other_seed || startISO;
+            const seedDate = new Date(seed + 'T00:00:00Z');
+            let d = new Date(startISO + 'T00:00:00Z');
+            const endD = new Date(endISO + 'T00:00:00Z');
+            while (d <= endD) {
+              const diffDays = Math.floor((d - seedDate) / 86400000);
+              if (diffDays >= 0 && diffDays % 2 === 0) ensureForDate(tpl, d.toISOString().slice(0,10));
+              d.setUTCDate(d.getUTCDate()+1);
+            }
+          }
+        });
+        resolve(generated);
+      }, (_, error) => reject(error));
     });
   });
 };
@@ -542,278 +644,41 @@ export const getWeeklyReport = (startDate) => {
   });
 };
 
-// Phase 8 Recurring Template Helpers
-export const createRecurringTemplate = ({ name, description = '', patternType, patternDays = '', everyOtherSeed = null, priority = 3, taskClassId = null }) => {
-  return new Promise((resolve, reject) => {
-    if (!name || !name.trim()) return reject(new Error('Name required'));
-    if (!patternType) return reject(new Error('patternType required'));
-    if (!['daily', 'every_other_day', 'weekdays'].includes(patternType)) return reject(new Error('Invalid patternType'));
-    if (patternType === 'weekdays') {
-      const days = (patternDays || '').split(',').map(d => d.trim()).filter(Boolean);
-      const valid = days.every(d => /^([0-6])$/.test(d));
-      if (!days.length || !valid) return reject(new Error('Invalid patternDays'));
-      patternDays = days.join(',');
-    } else {
-      patternDays = null;
-    }
-    if (patternType === 'every_other_day' && !everyOtherSeed) {
-      everyOtherSeed = new Date().toISOString().slice(0,10);
-    }
-    db.transaction(tx => {
-      tx.executeSql(
-        'INSERT INTO RecurringTemplate (name, description, pattern_type, pattern_days, every_other_seed, priority, task_class_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [name.trim(), description, patternType, patternDays, everyOtherSeed, priority, taskClassId],
-        (_, result) => resolve(result.insertId),
-        (_, error) => reject(error)
-      );
-    });
+// Kanban / status-based task helpers
+export const getTasksKanban = () => new Promise((resolve, reject) => {
+  db.readTransaction(tx => {
+    tx.executeSql(
+      `SELECT * FROM Task ORDER BY CASE status WHEN 'todo' THEN 0 WHEN 'in_progress' THEN 1 WHEN 'done' THEN 2 ELSE 3 END, sort_order ASC, priority DESC, task_id ASC`,
+      [],
+      (_, { rows }) => { const arr=[]; for(let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr); },
+      (_, e) => reject(e)
+    );
   });
-};
+});
 
-export const updateRecurringTemplate = (id, { name, description, patternType, patternDays, everyOtherSeed, active, priority, taskClassId }) => {
-  return new Promise((resolve, reject) => {
-    if (!id) return reject(new Error('ID required'));
-    const fields = [];
-    const values = [];
-    if (name !== undefined) { fields.push('name = ?'); values.push(name.trim()); }
-    if (description !== undefined) { fields.push('description = ?'); values.push(description); }
-    if (patternType !== undefined) {
-      if (!['daily', 'every_other_day', 'weekdays'].includes(patternType)) return reject(new Error('Invalid patternType'));
-      fields.push('pattern_type = ?'); values.push(patternType);
-    }
-    if (patternDays !== undefined) {
-      if (patternDays) {
-        const days = patternDays.split(',').map(d => d.trim()).filter(Boolean);
-        const valid = days.every(d => /^([0-6])$/.test(d));
-        if (!valid) return reject(new Error('Invalid patternDays'));
-        fields.push('pattern_days = ?'); values.push(days.join(','));
-      } else {
-        fields.push('pattern_days = NULL');
-      }
-    }
-    if (everyOtherSeed !== undefined) { fields.push('every_other_seed = ?'); values.push(everyOtherSeed); }
-    if (active !== undefined) { fields.push('active = ?'); values.push(active ? 1 : 0); }
-    if (priority !== undefined) { fields.push('priority = ?'); values.push(priority); }
-    if (taskClassId !== undefined) { fields.push('task_class_id = ?'); values.push(taskClassId); }
-    if (!fields.length) return resolve(0);
-    fields.push('updated_at = datetime("now")');
-    values.push(id);
-    db.transaction(tx => {
-      tx.executeSql(
-        `UPDATE RecurringTemplate SET ${fields.join(', ')} WHERE template_id = ?`,
-        values,
-        (_, result) => resolve(result.rowsAffected),
-        (_, error) => reject(error)
-      );
-    });
-  });
-};
-
-export const listRecurringTemplates = () => {
-  return new Promise((resolve, reject) => {
-    db.readTransaction(tx => {
-      tx.executeSql('SELECT * FROM RecurringTemplate WHERE active = 1 ORDER BY created_at DESC', [], (_, { rows }) => {
-        const arr = []; for (let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr);
-      }, (_, e) => reject(e));
-    });
-  });
-};
-
-export const deactivateRecurringTemplate = (id) => updateRecurringTemplate(id, { active: 0 });
-
-export const generateRecurringInstances = ({ daysAhead = 7 } = {}) => {
-  return new Promise((resolve, reject) => {
-    const today = new Date();
-    const startISO = today.toISOString().slice(0,10);
-    const end = new Date(today); end.setDate(end.getDate() + daysAhead);
-    const endISO = end.toISOString().slice(0,10);
-
-    db.transaction(tx => {
-      tx.executeSql('SELECT * FROM RecurringTemplate WHERE active = 1', [], (_, { rows }) => {
-        let generated = 0;
-        const templates = []; for (let i=0;i<rows.length;i++) templates.push(rows.item(i));
-
-        const ensureForDate = (tpl, dateStr) => {
-          tx.executeSql(
-            'SELECT 1 FROM Task WHERE template_id = ? AND due_date = ? LIMIT 1',
-            [tpl.template_id, dateStr],
-            (_, existing) => {
-              if (existing.rows.length) return; // already generated
-              tx.executeSql(
-                'INSERT INTO Task (name, description, due_date, completed, template_id, is_generated, source_generation_date, priority, task_class_id) VALUES (?, ?, ?, 0, ?, 1, ?, ?, ?)',
-                [tpl.name, tpl.description || '', dateStr, tpl.template_id, dateStr, tpl.priority || 3, tpl.task_class_id || null],
-                () => { generated += 1; },
-                () => {}
-              );
-            }
-          );
-        };
-
-        templates.forEach(tpl => {
-          if (tpl.pattern_type === 'daily') {
-            // generate each day
-            let d = new Date(startISO + 'T00:00:00Z');
-            const endD = new Date(endISO + 'T00:00:00Z');
-            while (d <= endD) { ensureForDate(tpl, d.toISOString().slice(0,10)); d.setUTCDate(d.getUTCDate()+1); }
-          } else if (tpl.pattern_type === 'weekdays') {
-            const days = (tpl.pattern_days || '').split(',').map(x => x.trim()).filter(Boolean);
-            let d = new Date(startISO + 'T00:00:00Z');
-            const endD = new Date(endISO + 'T00:00:00Z');
-            while (d <= endD) {
-              const wd = d.getUTCDay();
-              if (days.includes(String(wd))) ensureForDate(tpl, d.toISOString().slice(0,10));
-              d.setUTCDate(d.getUTCDate()+1);
-            }
-          } else if (tpl.pattern_type === 'every_other_day') {
-            const seed = tpl.every_other_seed || startISO;
-            const seedDate = new Date(seed + 'T00:00:00Z');
-            let d = new Date(startISO + 'T00:00:00Z');
-            const endD = new Date(endISO + 'T00:00:00Z');
-            while (d <= endD) {
-              const diffDays = Math.floor((d - seedDate) / 86400000);
-              if (diffDays >= 0 && diffDays % 2 === 0) ensureForDate(tpl, d.toISOString().slice(0,10));
-              d.setUTCDate(d.getUTCDate()+1);
-            }
-          }
-        });
-        resolve(generated);
-      }, (_, error) => reject(error));
-    });
-  });
-};
-
-export const createActivityManual = ({ actionClassId = 1, startISO, endISO, description = '' }) => {
-  return new Promise((resolve, reject) => {
-    if (!startISO) return reject(new Error('startISO required'));
-    const durationMs = endISO ? (new Date(endISO) - new Date(startISO)) : null;
-    db.transaction(tx => {
-      tx.executeSql(
-        'INSERT INTO Activity (action_class_id, start_time, end_time, description, duration_ms) VALUES (?, ?, ?, ?, ?)',
-        [actionClassId, startISO, endISO || null, description, durationMs],
-        (_, result) => resolve(result.insertId),
-        (_, error) => reject(error)
-      );
-    });
-  });
-};
-
-// Preferences helpers
-export const setPreference = (key, value) => new Promise((resolve, reject) => {
+export const moveTaskToStatus = ({ taskId, newStatus }) => new Promise((resolve, reject) => {
+  if(!taskId || !newStatus) return reject(new Error('taskId/newStatus required'));
+  if(!['todo','in_progress','done'].includes(newStatus)) return reject(new Error('invalid status'));
   db.transaction(tx => {
-    tx.executeSql('INSERT INTO Preference (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', [key, value], () => resolve(true), (_, e) => reject(e));
+    // Append at end of target column
+    tx.executeSql(
+      `UPDATE Task SET status = ?, completed = CASE WHEN ? = 'done' THEN 1 ELSE 0 END, sort_order = COALESCE((SELECT MAX(sort_order)+1 FROM Task WHERE status = ?),0), updated_at = datetime('now') WHERE task_id = ?`,
+      [newStatus, newStatus, newStatus, taskId],
+      () => resolve(true),
+      (_, e) => reject(e)
+    );
   });
 });
 
-export const getPreference = (key, defaultValue = null) => new Promise((resolve) => {
-  db.readTransaction(tx => {
-    tx.executeSql('SELECT value FROM Preference WHERE key = ? LIMIT 1', [key], (_, { rows }) => {
-      if (rows.length) return resolve(rows.item(0).value);
-      resolve(defaultValue);
-    });
-  });
-});
-
-// Snooze / Streak helpers
-export const snoozeTask = (id, untilISO) => new Promise((resolve, reject) => {
-  if (!id) return reject(new Error('Task ID required'));
+export const reorderTasksInStatus = ({ status, orderedIds }) => new Promise((resolve, reject) => {
+  if(!['todo','in_progress','done'].includes(status)) return reject(new Error('invalid status'));
+  if(!Array.isArray(orderedIds)) return reject(new Error('orderedIds array required'));
   db.transaction(tx => {
-    tx.executeSql('UPDATE Task SET snoozed_until = ? WHERE task_id = ?', [untilISO, id], (_, r) => resolve(r.rowsAffected), (_, e) => reject(e));
-  });
+    orderedIds.forEach((id, idx) => {
+      tx.executeSql('UPDATE Task SET sort_order = ?, updated_at = datetime("now") WHERE task_id = ? AND status = ?', [idx, id, status]);
+    });
+  }, e => reject(e), () => resolve(true));
 });
-
-export const getActiveStreaks = () => new Promise((resolve, reject) => {
-  db.readTransaction(tx => {
-    tx.executeSql('SELECT * FROM Streak', [], (_, { rows }) => { const arr = []; for (let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr); }, (_, e) => reject(e));
-  });
-});
-
-export const getActivityById = (id) => new Promise((resolve, reject) => {
-  if (!id) return reject(new Error('id required'));
-  db.readTransaction(tx => {
-    tx.executeSql('SELECT a.*, c.name as action_class_name, c.color FROM Activity a JOIN ActionClass c ON a.action_class_id = c.action_class_id WHERE activity_id = ? LIMIT 1', [id], (_, { rows }) => {
-      resolve(rows.length ? rows.item(0) : null);
-    }, (_, e) => reject(e));
-  });
-});
-
-// Kanban board helpers
-export const listKanbanColumns = () => {
-  return new Promise((resolve, reject) => {
-    db.readTransaction(tx => {
-      tx.executeSql('SELECT * FROM KanbanColumn ORDER BY position ASC', [], (_, { rows }) => { const arr=[]; for(let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr); }, (_,e)=>reject(e));
-    });
-  });
-};
-
-export const createKanbanColumn = ({ key, title }) => {
-  return new Promise((resolve, reject) => {
-    if(!key || !title) return reject(new Error('key/title required'));
-    db.transaction(tx => {
-      tx.executeSql('SELECT MAX(position) AS maxp FROM KanbanColumn', [], (_, { rows }) => {
-        const pos = rows.length? (rows.item(0).maxp || 0)+1 : 0;
-        tx.executeSql('INSERT INTO KanbanColumn (key, title, position) VALUES (?,?,?)', [key, title, pos], (_, r)=> resolve(r.insertId), (_,e)=>reject(e));
-      });
-    });
-  });
-};
-
-export const renameKanbanColumn = (columnId, title) => {
-  return new Promise((resolve, reject) => {
-    if(!columnId) return reject(new Error('id required'));
-    db.transaction(tx => tx.executeSql('UPDATE KanbanColumn SET title=? WHERE column_id=?', [title, columnId], (_,r)=>resolve(r.rowsAffected), (_,e)=>reject(e)));
-  });
-};
-
-export const reorderKanbanColumns = (orderedIds) => {
-  return new Promise((resolve, reject) => {
-    if(!Array.isArray(orderedIds)) return reject(new Error('array required'));
-    db.transaction(tx => {
-      orderedIds.forEach((id, idx) => {
-        tx.executeSql('UPDATE KanbanColumn SET position=? WHERE column_id=?', [idx, id]);
-      });
-    }, reject, () => resolve(true));
-  });
-};
-
-export const getKanbanTasks = () => {
-  return new Promise((resolve, reject) => {
-    db.readTransaction(tx => {
-      tx.executeSql('SELECT * FROM Task ORDER BY status, sort_order', [], (_, { rows }) => {
-        const arr=[]; for(let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr);
-      }, (_,e)=>reject(e));
-    });
-  });
-};
-
-export const updateTaskKanbanPosition = ({ taskId, status, sortOrder }) => {
-  return new Promise((resolve, reject) => {
-    if(!taskId) return reject(new Error('taskId required'));
-    const fields=[]; const vals=[];
-    if(status !== undefined){ fields.push('status=?'); vals.push(status); }
-    if(sortOrder !== undefined){ fields.push('sort_order=?'); vals.push(sortOrder); }
-    if(!fields.length) return resolve(0);
-    vals.push(taskId);
-    db.transaction(tx => {
-      tx.executeSql(`UPDATE Task SET ${fields.join(', ')}, updated_at=datetime('now') WHERE task_id=?`, vals, ()=> resolve(1), (_,e)=>reject(e));
-    });
-  });
-};
-
-export const batchUpdateKanbanPositions = (updates) => {
-  return new Promise((resolve, reject) => {
-    if(!Array.isArray(updates) || !updates.length) return resolve(0);
-    db.transaction(tx => {
-      updates.forEach(u => {
-        const { taskId, status, sortOrder } = u;
-        if(!taskId) return;
-        const parts=[]; const args=[];
-        if(status !== undefined){ parts.push('status=?'); args.push(status); }
-        if(sortOrder !== undefined){ parts.push('sort_order=?'); args.push(sortOrder); }
-        if(parts.length){ args.push(taskId); tx.executeSql(`UPDATE Task SET ${parts.join(', ')}, updated_at=datetime('now') WHERE task_id=?`, args); }
-      });
-    }, reject, () => resolve(updates.length));
-  });
-};
 
 // Internal helpers for duration recalculation & date utilities
 const recalcDuration = (tx, id) => {
@@ -1006,4 +871,37 @@ export const stopCurrentActivityWithNormalization = async () => {
       DeviceEventEmitter.emit('activityUpdated');
     } catch(e) { /* swallow */ }
   }
+};
+
+// Preferences management
+export const setPreference = (key, value) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        'INSERT OR REPLACE INTO Preference (key, value) VALUES (?, ?)',
+        [key, value],
+        (_, result) => resolve(result),
+        (_, error) => reject(error)
+      );
+    });
+  });
+};
+
+export const getPreference = (key, defaultValue = null) => {
+  return new Promise((resolve, reject) => {
+    db.transaction(tx => {
+      tx.executeSql(
+        'SELECT value FROM Preference WHERE key = ?',
+        [key],
+        (_, { rows }) => {
+          if (rows.length > 0) {
+            resolve(rows.item(0).value);
+          } else {
+            resolve(defaultValue);
+          }
+        },
+        (_, error) => reject(error)
+      );
+    });
+  });
 };
