@@ -9,7 +9,7 @@ import { NavigationContainer, useNavigationContainerRef } from '@react-navigatio
 import { Modal, View, Text, ScrollView, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
 import Input from './src/components/ui/Input';
 import PrimaryButton from './src/components/ui/PrimaryButton';
-import { getActionClasses, startActivity, createTask, getCurrentActivity, stopCurrentActivity, listTaskClasses } from './src/services/Database';
+import { getActionClasses, startActivity, createTask, getCurrentActivity, stopCurrentActivity } from './src/services/Database';
 import Chip from './src/components/ui/Chip';
 import { DeviceEventEmitter } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -26,8 +26,8 @@ const RootInner = () => {
   const [activityDesc, setActivityDesc] = React.useState('');
   const [taskName, setTaskName] = React.useState('');
   const [taskPriority, setTaskPriority] = React.useState(3);
-  const [taskClasses, setTaskClasses] = React.useState([]);
-  const [taskClassId, setTaskClassId] = React.useState(null);
+  const [taskActionClasses, setTaskActionClasses] = React.useState([]);
+  const [taskActionClassId, setTaskActionClassId] = React.useState(null);
   const [currentActivity, setCurrentActivity] = React.useState(null);
 
   // Load current activity when switching to Activity tab
@@ -38,7 +38,7 @@ const RootInner = () => {
   }, [current]);
 
   useEffect(() => { if (activityModal) { getActionClasses().then(setClasses).catch(()=>{}); } }, [activityModal]);
-  useEffect(() => { if (taskModal) { listTaskClasses().then(setTaskClasses).catch(()=>{}); } }, [taskModal]);
+  useEffect(() => { if (taskModal) { getActionClasses().then(setTaskActionClasses).catch(()=>{}); } }, [taskModal]);
 
   const navigateSafe = (name, params) => { try { navRef.navigate(name, params || undefined); } catch {} };
 
@@ -70,8 +70,8 @@ const RootInner = () => {
   };
   const submitTask = async () => {
     if (!taskName.trim()) return;
-    await createTask({ name: taskName.trim(), priority: taskPriority, taskClassId }); // start_date/time omitted => To-Do
-    setTaskName(''); setTaskPriority(3); setTaskClassId(null); setTaskModal(false);
+    await createTask({ name: taskName.trim(), priority: taskPriority, actionClassId: taskActionClassId }); // start_date/time omitted => To-Do
+    setTaskName(''); setTaskPriority(3); setTaskActionClassId(null); setTaskModal(false);
     DeviceEventEmitter.emit('tasksUpdated'); navigateSafe('TasksTab');
   };
 
@@ -146,10 +146,10 @@ const RootInner = () => {
               </View>
               <Text style={{ fontSize:12, color: palette.textLight, marginTop: spacing(3) }}>Task Class</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: spacing(1) }}>
-                {taskClasses.map(cls => (
-                  <TouchableOpacity key={cls.task_class_id} onPress={()=> setTaskClassId(cls.task_class_id)} style={{ flexDirection:'row', alignItems:'center', paddingHorizontal:12, paddingVertical:6, borderRadius:18, marginRight:8, backgroundColor: taskClassId===cls.task_class_id ? (cls.color || palette.primary) : palette.border }}>
+                {taskActionClasses.map(cls => (
+                  <TouchableOpacity key={cls.action_class_id} onPress={()=> setTaskActionClassId(cls.action_class_id)} style={{ flexDirection:'row', alignItems:'center', paddingHorizontal:12, paddingVertical:6, borderRadius:18, marginRight:8, backgroundColor: taskActionClassId===cls.action_class_id ? (cls.color || palette.primary) : palette.border }}>
                     <View style={{ width:10, height:10, borderRadius:5, backgroundColor: cls.color || palette.primary, marginRight:6 }} />
-                    <Text style={{ fontSize:11, color: taskClassId===cls.task_class_id? '#fff' : palette.text }}>{cls.name}</Text>
+                    <Text style={{ fontSize:11, color: taskActionClassId===cls.action_class_id? '#fff' : palette.text }}>{cls.name}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>

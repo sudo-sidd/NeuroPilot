@@ -4,7 +4,7 @@ console.log('[SettingsScreen] module evaluating');
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 // Removed FlatList import to avoid nested VirtualizedList
-import { getActionClasses, createActionClass, updateActionClass, deleteActionClass, setPreference, getPreference, listTaskClasses, createTaskClass, updateTaskClass, deleteTaskClass, listRecurringTemplates, createRecurringTemplate, updateRecurringTemplate, deactivateRecurringTemplate } from '../services/Database';
+import { getActionClasses, createActionClass, updateActionClass, deleteActionClass, setPreference, getPreference, listRecurringTemplates, createRecurringTemplate, updateRecurringTemplate, deactivateRecurringTemplate } from '../services/Database';
 import { useTheme, useThemeMode } from '../constants/theme';
 import Card from '../components/ui/Card';
 import SectionHeader from '../components/ui/SectionHeader';
@@ -83,15 +83,6 @@ const SettingsScreen = ({ navigation }) => {
   const [showClassManager, setShowClassManager] = useState(false);
   const [newColor, setNewColor] = useState('#2196F3');
   const [editColor, setEditColor] = useState(null);
-  // Task Class state
-  const [taskClasses, setTaskClasses] = useState([]);
-  const [taskClassName, setTaskClassName] = useState('');
-  const [taskNewColor, setTaskNewColor] = useState('#607D8B');
-  const [taskEditId, setTaskEditId] = useState(null);
-  const [taskEditName, setTaskEditName] = useState('');
-  const [taskEditColor, setTaskEditColor] = useState(null);
-  const [taskError, setTaskError] = useState(null);
-  const [showTaskClassManager, setShowTaskClassManager] = useState(false);
   // Recurring Template state
   const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [templates, setTemplates] = useState([]);
@@ -122,19 +113,10 @@ const SettingsScreen = ({ navigation }) => {
       setClasses(c);
     } catch (e) { setError(e.message); dlog('refresh action classes error', e); }
   };
-  const refreshTaskClasses = async () => {
-    dlog('refresh task classes start');
-    try {
-      const t = await listTaskClasses();
-      dlog('refresh task classes loaded', t.length);
-      setTaskClasses(t);
-    } catch (e) { setTaskError(e.message); dlog('refresh task classes error', e); }
-  };
   const refreshTemplates = async () => { dlog('refresh templates start'); try { const r = await listRecurringTemplates(); dlog('refresh templates loaded', r.length); setTemplates(r); } catch (e) { dlog('refresh templates error', e); } };
 
   useEffect(() => { refresh(); }, []);
-  useEffect(() => { if (showTaskClassManager) { dlog('showTaskClassManager true -> refresh'); refreshTaskClasses(); } }, [showTaskClassManager]);
-  useEffect(() => { if(showTemplateManager) { dlog('showTemplateManager true -> refresh'); refreshTemplates(); refreshTaskClasses(); } }, [showTemplateManager]);
+  useEffect(() => { if(showTemplateManager) { dlog('showTemplateManager true -> refresh'); refreshTemplates(); } }, [showTemplateManager]);
   useEffect(() => {
     (async () => {
       dlog('load preferences start');
@@ -232,13 +214,6 @@ const SettingsScreen = ({ navigation }) => {
                       <Text style={{ marginTop: spacing(1), fontSize:12, color: palette.primary }}>{showClassManager ? 'Hide' : 'Manage'}</Text>
                     </Card>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => { dlog('toggle showTaskClassManager', !showTaskClassManager); setShowTaskClassManager(s => !s); }} style={{ width:'50%', padding: spacing(1) }}>
-                    <Card>
-                      <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }}>Task Classes</Text>
-                      <Text style={{ marginTop: spacing(1), fontSize:12, color: palette.textLight }}>{taskClasses.length} total</Text>
-                      <Text style={{ marginTop: spacing(1), fontSize:12, color: palette.primary }}>{showTaskClassManager ? 'Hide' : 'Manage'}</Text>
-                    </Card>
-                  </TouchableOpacity>
                   <TouchableOpacity onPress={() => { dlog('toggle showTemplateManager', !showTemplateManager); setShowTemplateManager(s=>!s); }} style={{ width:'50%', padding: spacing(1) }}>
                     <Card>
                       <Text style={{ fontSize:14, fontWeight:'600', color: palette.text }}>Templates</Text>
@@ -277,51 +252,6 @@ const SettingsScreen = ({ navigation }) => {
                 Input={Input}
                 PrimaryButton={PrimaryButton}
               />
-              {showTaskClassManager && (
-                <Card style={{ marginTop: spacing(4) }}>
-                  <SectionHeader title="Manage Task Classes" />
-                  <View style={{ flexDirection:'row', alignItems:'center', marginTop: spacing(2), marginBottom: spacing(3) }}>
-                    <Input placeholder="New task class name" value={taskClassName} onChangeText={setTaskClassName} style={{ flex:1 }} />
-                    <PrimaryButton small title="Add" onPress={async () => { setTaskError(null); try { await createTaskClass({ name: taskClassName, color: taskNewColor }); setTaskClassName(''); setTaskNewColor(colorPalette[0]); refreshTaskClasses(); } catch(e){ setTaskError(e.message); } }} />
-                  </View>
-                  <View style={{ flexWrap:'wrap', flexDirection:'row', marginBottom: spacing(2) }}>
-                    {colorPalette.map((c,i) => (
-                      <TouchableOpacity key={`taskNew-${i}-${c}`} onPress={()=>setTaskNewColor(c)} style={{ width:'8.33%', aspectRatio:1, padding:2 }}>
-                        <View style={{ flex:1, borderRadius:6, backgroundColor:c, borderWidth: taskNewColor===c ? 3 : 1, borderColor: taskNewColor===c ? palette.text : palette.border }} />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                  {taskEditId && (
-                    <View style={{ marginBottom: spacing(3) }}>
-                      <View style={{ flexDirection:'row', alignItems:'center', marginBottom: spacing(2) }}>
-                        <Input placeholder="Edit task class name" value={taskEditName} onChangeText={setTaskEditName} style={{ flex:1 }} />
-                        <PrimaryButton small title="Save" onPress={async () => { try { await updateTaskClass(taskEditId, { name: taskEditName, color: taskEditColor }); refreshTaskClasses(); } catch(e){ setTaskError(e.message); } setTaskEditId(null); setTaskEditName(''); setTaskEditColor(null); }} />
-                        <PrimaryButton small title="Cancel" onPress={() => { setTaskEditId(null); setTaskEditName(''); setTaskEditColor(null); }} />
-                      </View>
-                      <View style={{ flexWrap:'wrap', flexDirection:'row' }}>
-                        {colorPalette.map((c,i) => (
-                          <TouchableOpacity key={`taskEdit-${i}-${c}`} onPress={()=>setTaskEditColor(c)} style={{ width:'8.33%', aspectRatio:1, padding:2 }}>
-                            <View style={{ flex:1, borderRadius:6, backgroundColor:c, borderWidth: taskEditColor===c ? 3 : 1, borderColor: taskEditColor===c ? palette.text : palette.border }} />
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </View>
-                  )}
-                  {taskError && <Text style={{ color: palette.danger, marginTop: spacing(2) }}>{taskError}</Text>}
-                  <View style={{ marginTop: spacing(2) }}>
-                    {taskClasses.map((item, idx) => (
-                      <View key={item.task_class_id} style={{ flexDirection:'row', alignItems:'center', paddingVertical: spacing(2), borderTopWidth: idx===0 ? 0 : 1, borderColor: palette.border }}>
-                        <View style={{ width:14, height:14, borderRadius:4, backgroundColor: item.color || palette.primary, marginRight: spacing(2) }} />
-                        <Text style={{ flex:1, fontSize:14, color: palette.text }}>{item.name}</Text>
-                        <PrimaryButton small title="Edit" onPress={() => { dlog('edit task class', item.task_class_id); setTaskEditId(item.task_class_id); setTaskEditName(item.name); setTaskEditColor(item.color || colorPalette[0]); }} />
-                        <View style={{ width: spacing(1) }} />
-                        <PrimaryButton small title="Del" onPress={async () => { dlog('delete task class', item.task_class_id); try { await deleteTaskClass(item.task_class_id); refreshTaskClasses(); } catch(e){ setTaskError(e.message); dlog('delete task class error', e); } }} />
-                      </View>
-                    ))}
-                    {!taskClasses.length && <Text style={{ fontSize:12, color: palette.textLight }}>No task classes yet.</Text>}
-                  </View>
-                </Card>
-              )}
               {showTemplateManager && (
                 <Card style={{ marginTop: spacing(4) }}>
                   <SectionHeader title={editingTemplate? 'Edit Template':'New Template'} />
@@ -358,12 +288,12 @@ const SettingsScreen = ({ navigation }) => {
                       </TouchableOpacity>
                     ))}
                   </View>
-                  <Text style={{ fontSize:12, color: palette.textLight, marginTop: spacing(3) }}>Task Class</Text>
+                  <Text style={{ fontSize:12, color: palette.textLight, marginTop: spacing(3) }}>Action Class</Text>
                   <View style={{ flexDirection:'row', flexWrap:'wrap', marginTop: spacing(1) }}>
-                    {taskClasses.map(cls => (
-                      <TouchableOpacity key={cls.task_class_id} onPress={()=> setTplClass(cls.task_class_id)} style={{ flexDirection:'row', alignItems:'center', paddingHorizontal:12, paddingVertical:6, borderRadius:18, marginRight:8, marginBottom:8, backgroundColor: tplClass===cls.task_class_id ? (cls.color || palette.primary) : palette.border }}>
+                    {classes.map(cls => (
+                      <TouchableOpacity key={cls.action_class_id} onPress={()=> setTplClass(cls.action_class_id)} style={{ flexDirection:'row', alignItems:'center', paddingHorizontal:12, paddingVertical:6, borderRadius:18, marginRight:8, marginBottom:8, backgroundColor: tplClass===cls.action_class_id ? (cls.color || palette.primary) : palette.border }}>
                         <View style={{ width:10, height:10, borderRadius:5, backgroundColor: cls.color || palette.primary, marginRight:6 }} />
-                        <Text style={{ fontSize:11, color: tplClass===cls.task_class_id? '#fff' : palette.text }}>{cls.name}</Text>
+                        <Text style={{ fontSize:11, color: tplClass===cls.action_class_id? '#fff' : palette.text }}>{cls.name}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -376,13 +306,13 @@ const SettingsScreen = ({ navigation }) => {
                     <TouchableOpacity onPress={() => { setEditingTemplate(null); setTplName(''); setTplDesc(''); setTplPattern('daily'); setTplWeekdays([]); setTplPriority(3); setTplClass(null); setTplSeed(new Date().toISOString().slice(0,10)); }} style={{ paddingVertical:10, paddingHorizontal:12 }}>
                       <Text style={{ fontSize:12, color: palette.textLight }}>Reset</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={async ()=> { if(!tplName.trim()) return; const weekDaysStr = tplPattern==='weekdays'? tplWeekdays.sort().join(',') : ''; try { if(editingTemplate){ await updateRecurringTemplate(editingTemplate.template_id, { name: tplName.trim(), description: tplDesc, patternType: tplPattern, patternDays: weekDaysStr, everyOtherSeed: tplPattern==='every_other_day'? tplSeed : null, priority: tplPriority, taskClassId: tplClass }); } else { await createRecurringTemplate({ name: tplName.trim(), description: tplDesc, patternType: tplPattern, patternDays: weekDaysStr, everyOtherSeed: tplPattern==='every_other_day'? tplSeed : null, priority: tplPriority, taskClassId: tplClass }); } refreshTemplates(); setEditingTemplate(null); setTplName(''); setTplDesc(''); setTplPattern('daily'); setTplWeekdays([]); setTplPriority(3); setTplClass(null); setTplSeed(new Date().toISOString().slice(0,10)); } catch {} }} style={{ paddingVertical:10, paddingHorizontal:12 }}>
+                    <TouchableOpacity onPress={async ()=> { if(!tplName.trim()) return; const weekDaysStr = tplPattern==='weekdays'? tplWeekdays.sort().join(',') : ''; try { if(editingTemplate){ await updateRecurringTemplate(editingTemplate.template_id, { name: tplName.trim(), description: tplDesc, patternType: tplPattern, patternDays: weekDaysStr, everyOtherSeed: tplPattern==='every_other_day'? tplSeed : null, priority: tplPriority, actionClassId: tplClass }); } else { await createRecurringTemplate({ name: tplName.trim(), description: tplDesc, patternType: tplPattern, patternDays: weekDaysStr, everyOtherSeed: tplPattern==='every_other_day'? tplSeed : null, priority: tplPriority, actionClassId: tplClass }); } refreshTemplates(); setEditingTemplate(null); setTplName(''); setTplDesc(''); setTplPattern('daily'); setTplWeekdays([]); setTplPriority(3); setTplClass(null); setTplSeed(new Date().toISOString().slice(0,10)); } catch {} }} style={{ paddingVertical:10, paddingHorizontal:12 }}>
                       <Text style={{ fontSize:12, color: palette.primary }}>{editingTemplate? 'Save':'Add'}</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={{ marginTop: spacing(2) }}>
                     {templates.map(tpl => (
-                      <TouchableOpacity key={tpl.template_id} onPress={()=> { dlog('select template edit', tpl.template_id); setEditingTemplate(tpl); setTplName(tpl.name); setTplDesc(tpl.description||''); setTplPattern(tpl.pattern_type); setTplWeekdays((tpl.pattern_days||'').split(',').filter(Boolean)); setTplPriority(tpl.priority||3); setTplClass(tpl.task_class_id||null); setTplSeed(tpl.every_other_seed || new Date().toISOString().slice(0,10)); }} style={{ paddingVertical:8, borderBottomWidth:1, borderColor: palette.border }}>
+                      <TouchableOpacity key={tpl.template_id} onPress={()=> { dlog('select template edit', tpl.template_id); setEditingTemplate(tpl); setTplName(tpl.name); setTplDesc(tpl.description||''); setTplPattern(tpl.pattern_type); setTplWeekdays((tpl.pattern_days||'').split(',').filter(Boolean)); setTplPriority(tpl.priority||3); setTplClass(tpl.action_class_id||null); setTplSeed(tpl.every_other_seed || new Date().toISOString().slice(0,10)); }} style={{ paddingVertical:8, borderBottomWidth:1, borderColor: palette.border }}>
                         <Text style={{ fontSize:13, color: palette.text, fontWeight:'600' }}>{tpl.name}</Text>
                         <Text style={{ fontSize:11, color: palette.textLight }}>{tpl.pattern_type}{tpl.pattern_type==='weekdays' && ':' + (tpl.pattern_days||'')}</Text>
                       </TouchableOpacity>

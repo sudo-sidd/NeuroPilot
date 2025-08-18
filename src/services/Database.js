@@ -214,73 +214,15 @@ export const deleteActionClass = (id) => {
   });
 };
 
-// TaskClass helpers (added to support task class selection in UI)
-export const listTaskClasses = () => {
-  return new Promise((resolve, reject) => {
-    db.readTransaction(tx => {
-      tx.executeSql('SELECT * FROM TaskClass ORDER BY name ASC', [], (_, { rows }) => {
-        const arr = []; for (let i=0;i<rows.length;i++) arr.push(rows.item(i)); resolve(arr);
-      }, (_, e) => reject(e));
-    });
-  });
-};
-
-export const createTaskClass = ({ name, color = '#607D8B' }) => {
-  return new Promise((resolve, reject) => {
-    if (!name || !name.trim()) return reject(new Error('Name required'));
-    db.transaction(tx => {
-      tx.executeSql(
-        'INSERT INTO TaskClass (name, color) VALUES (?, ?)',
-        [name.trim(), color],
-        (_, result) => resolve(result.insertId),
-        (_, error) => {
-          if (String(error.message || '').includes('UNIQUE')) return reject(new Error('Duplicate name'));
-          reject(error);
-        }
-      );
-    });
-  });
-};
-
-export const updateTaskClass = (id, { name, color }) => {
-  return new Promise((resolve, reject) => {
-    if (!id) return reject(new Error('ID required'));
-    const fields = []; const values = [];
-    if (name) { fields.push('name = ?'); values.push(name.trim()); }
-    if (color) { fields.push('color = ?'); values.push(color); }
-    if (!fields.length) return resolve(0);
-    values.push(id);
-    db.transaction(tx => {
-      tx.executeSql(`UPDATE TaskClass SET ${fields.join(', ')} WHERE task_class_id = ?`, values, (_, r) => resolve(r.rowsAffected), (_, e) => {
-        if (String(e.message || '').includes('UNIQUE')) return reject(new Error('Duplicate name'));
-        reject(e);
-      });
-    });
-  });
-};
-
-export const deleteTaskClass = (id) => {
-  return new Promise((resolve, reject) => {
-    if (!id) return reject(new Error('ID required'));
-    db.transaction(tx => {
-      // Prevent deletion if referenced by any Task
-      tx.executeSql('SELECT COUNT(*) as cnt FROM Task WHERE task_class_id = ?', [id], (_, { rows }) => {
-        if (rows.item(0).cnt > 0) return reject(new Error('Cannot delete: in use by tasks'));
-        tx.executeSql('DELETE FROM TaskClass WHERE task_class_id = ?', [id], (_, r) => resolve(r.rowsAffected), (_, e) => reject(e));
-      });
-    });
-  });
-};
-
 // Phase 3 Task helpers
-export const createTask = ({ name, description = '', dueDate = null, repetitionType = null, repetitionDays = null, reminderTime = null, priority = 3, taskClassId = null, startDate = null, startTime = null, dueTime = null }) => {
+export const createTask = ({ name, description = '', dueDate = null, repetitionType = null, repetitionDays = null, reminderTime = null, priority = 3, actionClassId = null, startDate = null, startTime = null, dueTime = null }) => {
   return new Promise((resolve, reject) => {
     if (!name || !name.trim()) return reject(new Error('Task name required'));
     const daysStr = Array.isArray(repetitionDays) ? repetitionDays.join(',') : repetitionDays;
     db.transaction(tx => {
       tx.executeSql(
-        'INSERT INTO Task (name, description, due_date, repetition_type, repetition_days, priority, task_class_id, start_date, start_time, due_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [name.trim(), description, dueDate, repetitionType, daysStr, priority, taskClassId, startDate, startTime, dueTime],
+        'INSERT INTO Task (name, description, due_date, repetition_type, repetition_days, priority, action_class_id, start_date, start_time, due_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [name.trim(), description, dueDate, repetitionType, daysStr, priority, actionClassId, startDate, startTime, dueTime],
         async (_, result) => {
           const id = result.insertId;
           if (dueDate && reminderTime) {
@@ -298,7 +240,7 @@ export const createTask = ({ name, description = '', dueDate = null, repetitionT
   });
 };
 
-export const updateTask = (id, { name, description, dueDate, completed, repetitionType, repetitionDays, reminderTime, priority, taskClassId, startDate, startTime, dueTime }) => {
+export const updateTask = (id, { name, description, dueDate, completed, repetitionType, repetitionDays, reminderTime, priority, actionClassId, startDate, startTime, dueTime }) => {
   return new Promise((resolve, reject) => {
     if (!id) return reject(new Error('Task ID required'));
     const fields = [];
@@ -310,7 +252,7 @@ export const updateTask = (id, { name, description, dueDate, completed, repetiti
     if (repetitionType !== undefined) { fields.push('repetition_type = ?'); values.push(repetitionType); }
     if (repetitionDays !== undefined) { fields.push('repetition_days = ?'); values.push(Array.isArray(repetitionDays) ? repetitionDays.join(',') : repetitionDays); }
     if (priority !== undefined) { fields.push('priority = ?'); values.push(priority); }
-    if (taskClassId !== undefined) { fields.push('task_class_id = ?'); values.push(taskClassId); }
+    if (actionClassId !== undefined) { fields.push('action_class_id = ?'); values.push(actionClassId); }
     if (startDate !== undefined) { fields.push('start_date = ?'); values.push(startDate); }
     if (startTime !== undefined) { fields.push('start_time = ?'); values.push(startTime); }
     if (dueTime !== undefined) { fields.push('due_time = ?'); values.push(dueTime); }
@@ -383,7 +325,7 @@ export const getTasks = ({ includeCompleted = true } = {}) => {
 // export const generateRecurringTasks = () => { /* deprecated */ };
 
 // Phase 8 Recurring Template Helpers
-export const createRecurringTemplate = ({ name, description = '', patternType, patternDays = '', everyOtherSeed = null, priority = 3, taskClassId = null }) => {
+export const createRecurringTemplate = ({ name, description = '', patternType, patternDays = '', everyOtherSeed = null, priority = 3, actionClassId = null }) => {
   return new Promise((resolve, reject) => {
     if (!name || !name.trim()) return reject(new Error('Name required'));
     if (!patternType) return reject(new Error('patternType required'));
@@ -401,8 +343,8 @@ export const createRecurringTemplate = ({ name, description = '', patternType, p
     }
     db.transaction(tx => {
       tx.executeSql(
-        'INSERT INTO RecurringTemplate (name, description, pattern_type, pattern_days, every_other_seed, priority, task_class_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [name.trim(), description, patternType, patternDays, everyOtherSeed, priority, taskClassId],
+        'INSERT INTO RecurringTemplate (name, description, pattern_type, pattern_days, every_other_seed, priority, action_class_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [name.trim(), description, patternType, patternDays, everyOtherSeed, priority, actionClassId],
         (_, result) => resolve(result.insertId),
         (_, error) => reject(error)
       );

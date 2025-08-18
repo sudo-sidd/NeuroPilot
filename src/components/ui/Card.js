@@ -4,12 +4,28 @@ import { useTheme } from '../../constants/theme';
 
 const Card = ({ style, children }) => {
   const { palette, radii, spacing, shadows } = useTheme();
-  const normalized = React.Children.map(children, (ch, i) => {
-    if (typeof ch === 'string' || typeof ch === 'number') {
-      return <Text key={i} style={{ color: palette.text, fontSize:14 }}>{ch}</Text>;
+  
+  if (!children) {
+    return (
+      <View style={[{
+        backgroundColor: palette.surface,
+        borderRadius: radii.md,
+        padding: spacing(4),
+        borderWidth: 1,
+        borderColor: palette.border,
+        ...shadows.card
+      }, style]} />
+    );
+  }
+
+  const childArray = React.Children.toArray(children);
+  const normalized = childArray.map((child, i) => {
+    if (typeof child === 'string' || typeof child === 'number') {
+      return <Text key={`card-text-${i}`} style={{ color: palette.text, fontSize: 14 }}>{child}</Text>;
     }
-    return ch;
+    return child;
   });
+  
   return (
     <View style={[{
       backgroundColor: palette.surface,
